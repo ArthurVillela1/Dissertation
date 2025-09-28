@@ -14,7 +14,7 @@ y = df2['R12M']
 X = df2[['T10Y2Y', 'BaaSpread']]
 
 # Stratified k-fold cross-validation (5-fold)
-threshold = 0.45
+threshold = 0.5
 skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 clf = LogisticRegression(solver="liblinear", random_state=42)
 
