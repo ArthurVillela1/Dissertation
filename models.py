@@ -9,7 +9,7 @@ import numpy as np
 df = pd.read_excel("Data.xlsx")
 #print(df)
 
-df2 = df[['R12M','R6M', 'T10Y2Y', 'BaaSpread', 'E-Rule']].dropna()
+df2 = df[['R12M', 'R6M', 'T10Y2Y', 'BaaSpread', 'E-Rule']].dropna()
 y = df2['R12M']
 X = df2[['T10Y2Y', 'BaaSpread']]
 
