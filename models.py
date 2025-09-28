@@ -25,7 +25,11 @@ for train_idx, test_idx in skf.split(X, y):
     y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
 
     clf.fit(X_tr, y_tr)
-    proba = clf.predict_proba(X_te)[:, 1]        
+    proba = clf.predict_proba(X_te)[:, 1]
+    #X_tr_sm = sm.add_constant(X_tr, has_constant='add')
+    #X_te_sm = sm.add_constant(X_te, has_constant='add')
+    #probit = sm.Probit(y_tr, X_tr_sm).fit(disp=False)
+    #proba = probit.predict(X_te_sm)        
     preds = (proba >= threshold).astype(int)     
 
     f1s.append(f1_score(y_te, preds))
