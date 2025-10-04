@@ -1,6 +1,6 @@
 import pandas as pd
 import statsmodels.api as sm
-from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score, TimeSeriesSplit
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, roc_auc_score, f1_score, precision_score, recall_score
@@ -16,34 +16,37 @@ from sklearn.metrics import (
 df = pd.read_excel("Data.xlsx")
 #print(df)
 
-data1 = df[['R12M', 'R6M', 'T10Y2Y', 'BaaSpread', 'E-Rule']].dropna()
-y = data1['R12M']
+data1 = df[['R_12M', 'R_6M', 'T10Y2Y', 'BaaSpread', 'E-Rule']].dropna()
+y = data1['R_12M']
 X = data1[['T10Y2Y', 'BaaSpread']]
 
 # Probit/Logit
-# Stratified k-fold cross-validation (5-fold)
 threshold = 0.5
-skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+tscv = TimeSeriesSplit(n_splits=5)
 clf = LogisticRegression(solver="liblinear", random_state=42)
 
 f1s, precs, recs, aucs, pr_aucs = [], [], [], [], []
 
-for train_idx, test_idx in skf.split(X, y):
+for train_idx, test_idx in tscv.split(X):
     X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
     y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
 
+    # Skip folds with no positive samples in test set
+    if len(np.unique(y_te)) < 2:
+        continue
+        
     clf.fit(X_tr, y_tr)
     proba = clf.predict_proba(X_te)[:, 1]
     
     preds = (proba >= threshold).astype(int)     
 
-    f1s.append(f1_score(y_te, preds))
+    f1s.append(f1_score(y_te, preds, zero_division=0))
     precs.append(precision_score(y_te, preds, zero_division=0))
-    recs.append(recall_score(y_te, preds))
+    recs.append(recall_score(y_te, preds, zero_division=0))
     aucs.append(roc_auc_score(y_te, proba))      
     pr_aucs.append(average_precision_score(y_te, proba))
 
-print("\n=== 5-fold Stratified CV @ threshold = {:.2f} (mean ± std) ===".format(threshold))
+print("\n=== 5-fold Time Series CV @ threshold = {:.2f} (mean ± std) ===".format(threshold))
 print("F1:        {:.3f} ± {:.3f}".format(np.mean(f1s),  np.std(f1s)))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(precs), np.std(precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(recs),  np.std(recs)))
@@ -60,21 +63,24 @@ gb_clf = GradientBoostingClassifier(
     max_depth=2
 )
 
-for train_idx, test_idx in skf.split(X, y):
+for train_idx, test_idx in tscv.split(X):
     X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
     y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
 
+    if len(np.unique(y_te)) < 2:
+        continue
+        
     gb_clf.fit(X_tr, y_tr)
     gb_proba = gb_clf.predict_proba(X_te)[:, 1]
     gb_preds = (gb_proba >= threshold).astype(int)
 
-    gb_f1s.append(f1_score(y_te, gb_preds))
+    gb_f1s.append(f1_score(y_te, gb_preds, zero_division=0))
     gb_precs.append(precision_score(y_te, gb_preds, zero_division=0))
-    gb_recs.append(recall_score(y_te, gb_preds))
+    gb_recs.append(recall_score(y_te, gb_preds, zero_division=0))
     gb_aucs.append(roc_auc_score(y_te, gb_proba))
     gb_pr_aucs.append(average_precision_score(y_te, gb_proba))
 
-print("\n=== 5-fold Stratified CV (Gradient Boosting) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
+print("\n=== 5-fold Time Series CV (Gradient Boosting) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
 print("F1:        {:.3f} ± {:.3f}".format(np.mean(gb_f1s),  np.std(gb_f1s)))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(gb_precs), np.std(gb_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(gb_recs),  np.std(gb_recs)))
@@ -92,21 +98,24 @@ svc_clf = SVC(
     random_state=42
 )
 
-for train_idx, test_idx in skf.split(X, y):
+for train_idx, test_idx in tscv.split(X):
     X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
     y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
 
+    if len(np.unique(y_te)) < 2:
+        continue
+        
     svc_clf.fit(X_tr, y_tr)
     svc_proba = svc_clf.predict_proba(X_te)[:, 1]
     svc_preds = (svc_proba >= threshold).astype(int)
 
-    svc_f1s.append(f1_score(y_te, svc_preds))
+    svc_f1s.append(f1_score(y_te, svc_preds, zero_division=0))
     svc_precs.append(precision_score(y_te, svc_preds, zero_division=0))
-    svc_recs.append(recall_score(y_te, svc_preds))
+    svc_recs.append(recall_score(y_te, svc_preds, zero_division=0))
     svc_aucs.append(roc_auc_score(y_te, svc_proba))
     svc_pr_aucs.append(average_precision_score(y_te, svc_proba))
 
-print("\n=== 5-fold Stratified CV (SVC) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
+print("\n=== 5-fold Time Series CV (SVC) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
 print("F1:        {:.3f} ± {:.3f}".format(np.mean(svc_f1s),  np.std(svc_f1s)))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(svc_precs), np.std(svc_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(svc_recs),  np.std(svc_recs)))
@@ -124,21 +133,24 @@ rf_clf = RandomForestClassifier(
     n_jobs=-1
 )
 
-for train_idx, test_idx in skf.split(X, y):
+for train_idx, test_idx in tscv.split(X):
     X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
     y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
 
+    if len(np.unique(y_te)) < 2:
+        continue
+        
     rf_clf.fit(X_tr, y_tr)
     rf_proba = rf_clf.predict_proba(X_te)[:, 1]
     rf_preds = (rf_proba >= threshold).astype(int)
 
-    rf_f1s.append(f1_score(y_te, rf_preds))
+    rf_f1s.append(f1_score(y_te, rf_preds, zero_division=0))
     rf_precs.append(precision_score(y_te, rf_preds, zero_division=0))
-    rf_recs.append(recall_score(y_te, rf_preds))
+    rf_recs.append(recall_score(y_te, rf_preds, zero_division=0))
     rf_aucs.append(roc_auc_score(y_te, rf_proba))
     rf_pr_aucs.append(average_precision_score(y_te, rf_proba)) 
 
-print("\n=== 5-fold Stratified CV (Random Forest) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
+print("\n=== 5-fold Time Series CV (Random Forest) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
 print("F1:        {:.3f} ± {:.3f}".format(np.mean(rf_f1s),  np.std(rf_f1s)))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(rf_precs), np.std(rf_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(rf_recs),  np.std(rf_recs)))
@@ -146,10 +158,25 @@ print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(rf_aucs),  np.std(rf_aucs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(rf_pr_aucs), np.std(rf_pr_aucs))) 
 
 
-# Testing for multicolinearity
-# Add constant to X
+# Statistical significance analysis using statsmodels
+print("\n=== Statistical Significance Analysis ===")
 X_with_const = sm.add_constant(X, has_constant='add')
+logit_model = sm.Logit(y, X_with_const)
+logit_results = logit_model.fit(disp=0)
 
+print("Logistic Regression Coefficients:")
+print(logit_results.summary2().tables[1][['Coef.', 'Std.Err.', 'z', 'P>|z|']])
+
+# Calculate odds ratios
+odds_ratios = np.exp(logit_results.params)
+print(f"\nOdds Ratios:")
+for var, or_val in odds_ratios.items():
+    if var != 'const':
+        pval = logit_results.pvalues[var]
+        significance = "***" if pval < 0.01 else "**" if pval < 0.05 else "*" if pval < 0.1 else ""
+        print(f"{var}: {or_val:.3f} {significance}")
+
+# Testing for multicolinearity
 vif_data = pd.DataFrame()
 vif_data["feature"] = X_with_const.columns
 vif_data["VIF"] = [
@@ -157,6 +184,5 @@ vif_data["VIF"] = [
     for i in range(X_with_const.shape[1])
 ]
 
-# Drop the constant from the report
 print("\n=== Variance Inflation Factors (VIF) ===")
 print(vif_data[vif_data["feature"] != "const"])
