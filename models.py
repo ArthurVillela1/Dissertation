@@ -32,13 +32,13 @@ for train_idx, test_idx in tscv.split(X):
     X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx] # Splits feature matrix X into training and testing sets using the indices provided by TimeSeriesSplit
     y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx] # Splits target vector y into training and testing sets using the indices provided by TimeSeriesSplit
 
-    if len(np.unique(y_te)) < 2:
+    if len(np.unique(y_te)) < 2: # Skip folds that can't be properly evaluated because certain machine learning metrics become mathematically undefined or meaningless when only one class is present in the test set
         continue
         
-    clf.fit(X_tr, y_tr)
-    proba = clf.predict_proba(X_te)[:, 1]
+    clf.fit(X_tr, y_tr) # Trains (fits) the logistic regression model on the training data.
+    proba = clf.predict_proba(X_te)[:, 1] # Gets the recession probabilities for the test set from the trained model.
     
-    preds = (proba >= threshold).astype(int)     
+    preds = (proba >= threshold).astype(int) # Converts probabilities into binary classifications     
 
     f1s.append(f1_score(y_te, preds, zero_division=0))
     precs.append(precision_score(y_te, preds, zero_division=0))
@@ -95,7 +95,7 @@ svc_clf = SVC(
     C=1.0,
     gamma="scale",
     probability=True,
-    random_state=42
+    random_state=42 # Ensures the optimization starts training the model with the same parameters and data selection
 )
 
 for train_idx, test_idx in tscv.split(X):
