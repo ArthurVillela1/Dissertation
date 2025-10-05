@@ -14,24 +14,25 @@ from sklearn.metrics import (
 )
 
 df = pd.read_excel("Data.xlsx")
-#print(df)
+# print(df) # --- IGNORE ---
 
 data1 = df[['R_12M', 'R_6M', 'T10Y2Y', 'T10Y3M', 'BaaSpread', 'E-Rule', 'PERatioS&P']].dropna()
 y = data1['R_12M']
 X = data1[['T10Y3M', 'BaaSpread']]
 
-# Probit/Logit
-threshold = 0.5
-tscv = TimeSeriesSplit(n_splits=5)
-clf = LogisticRegression(solver="liblinear", random_state=42)
+
+threshold = 0.5 # Threshold to convert predicted probabilities into binary predictions.
+tscv = TimeSeriesSplit(n_splits=5) # Cross-validation strategy that creates 5 sequential train/test splits while respecting temporal order.
+
+#Logit
+clf = LogisticRegression(solver="liblinear", random_state=42) # "liblinear" is a solver that uses a coordinate descent algorithm
 
 f1s, precs, recs, aucs, pr_aucs = [], [], [], [], []
 
 for train_idx, test_idx in tscv.split(X):
-    X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
-    y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
+    X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx] # Splits feature matrix X into training and testing sets using the indices provided by TimeSeriesSplit
+    y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx] # Splits target vector y into training and testing sets using the indices provided by TimeSeriesSplit
 
-    # Skip folds with no positive samples in test set
     if len(np.unique(y_te)) < 2:
         continue
         
@@ -156,7 +157,6 @@ print("Precision: {:.3f} ± {:.3f}".format(np.mean(rf_precs), np.std(rf_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(rf_recs),  np.std(rf_recs)))
 print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(rf_aucs),  np.std(rf_aucs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(rf_pr_aucs), np.std(rf_pr_aucs))) 
-
 
 # Statistical significance analysis using statsmodels
 print("\n=== Statistical Significance Analysis ===")
