@@ -16,9 +16,9 @@ from sklearn.metrics import (
 df = pd.read_excel("Data.xlsx")
 #print(df)
 
-data1 = df[['R_12M', 'R_6M', 'T10Y2Y', 'BaaSpread', 'E-Rule']].dropna()
+data1 = df[['R_12M', 'R_6M', 'T10Y2Y', 'T10Y3M', 'BaaSpread', 'E-Rule', 'PERatioS&P']].dropna()
 y = data1['R_12M']
-X = data1[['T10Y2Y', 'BaaSpread']]
+X = data1[['T10Y3M', 'BaaSpread']]
 
 # Probit/Logit
 threshold = 0.5
