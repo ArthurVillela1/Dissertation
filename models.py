@@ -29,7 +29,7 @@ clf = LogisticRegression(solver="liblinear", random_state=42) # "liblinear" is a
 f1s, precs, recs, aucs, pr_aucs = [], [], [], [], []
 
 for train_idx, test_idx in tscv.split(X):
-    X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx] # Splits feature matrix X into training and testing sets using the indices provided by TimeSeriesSplit
+    X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx] # Splits feature matrix X into training and testing sets using the indices provided by TimeSeriesSplit. iloc gets rows from X using the row numbers in train_idx
     y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx] # Splits target vector y into training and testing sets using the indices provided by TimeSeriesSplit
 
     if len(np.unique(y_te)) < 2: # Skip folds that can't be properly evaluated because certain machine learning metrics become mathematically undefined or meaningless when only one class is present in the test set
@@ -40,7 +40,7 @@ for train_idx, test_idx in tscv.split(X):
     
     preds = (proba >= threshold).astype(int) # Converts probabilities into binary classifications     
 
-    f1s.append(f1_score(y_te, preds, zero_division=0))
+    f1s.append(f1_score(y_te, preds, zero_division=0)) # 'zero_division=0' -> Instead of crashing with a math error (dividing by zero), it returns 0
     precs.append(precision_score(y_te, preds, zero_division=0))
     recs.append(recall_score(y_te, preds, zero_division=0))
     aucs.append(roc_auc_score(y_te, proba))      
@@ -59,12 +59,12 @@ gb_f1s, gb_precs, gb_recs, gb_aucs, gb_pr_aucs = [], [], [], [], []
 gb_clf = GradientBoostingClassifier(
     random_state=42,
     n_estimators=300,     
-    learning_rate=0.05,
-    max_depth=2
+    learning_rate=0.05, # Controls how much each tree contributes to the final prediction
+    max_depth=2 # How deep each individual tree can grow. Max_depth=2: Each tree can only make 2 levels of decisions (splits)
 )
 
 for train_idx, test_idx in tscv.split(X):
-    X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
+    X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx] 
     y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
 
     if len(np.unique(y_te)) < 2:
@@ -91,10 +91,10 @@ print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(gb_pr_aucs), np.std(gb_pr_auc
 svc_f1s, svc_precs, svc_recs, svc_aucs, svc_pr_aucs = [], [], [], [], []
 
 svc_clf = SVC(
-    kernel="rbf",
-    C=1.0,
-    gamma="scale",
-    probability=True,
+    kernel="rbf", # Creates curved decision boundaries instead of straight lines
+    C=1.0, # Controls trade-off between perfect fit vs simple model (underfitting x overfitting). C=1.0: Balanced middle ground
+    gamma="scale", # Controls RBF kernel "width"
+    probability=True, # Enables probability output
     random_state=42 # Ensures the optimization starts training the model with the same parameters and data selection
 )
 
