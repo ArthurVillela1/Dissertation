@@ -128,9 +128,9 @@ rf_f1s, rf_precs, rf_recs, rf_aucs, rf_pr_aucs = [], [], [], [], []
 rf_clf = RandomForestClassifier(
     n_estimators=500,
     max_depth=None,
-    min_samples_leaf=1,
+    min_samples_leaf=1, # Minimum number of samples required at each leaf node
     random_state=42,
-    n_jobs=-1
+    n_jobs=-1 # Number of CPU cores to use for parallel processing. n_jobs=-1: Use ALL available CPU cores (fastest)
 )
 
 for train_idx, test_idx in tscv.split(X):
