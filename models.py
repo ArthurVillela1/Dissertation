@@ -8,6 +8,7 @@ import numpy as np
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.naive_bayes import GaussianNB
 from sklearn.metrics import (
     f1_score, precision_score, recall_score, roc_auc_score,
     average_precision_score
@@ -17,7 +18,7 @@ df = pd.read_excel("Data.xlsx")
 
 data1 = df[['R_12M', 'R_6M', 'T10Y2Y', 'T10Y3M', 'BaaSpread', 'E-Rule', 'PERatioS&P']].dropna()
 y = data1['R_12M']
-X = data1[['T10Y3M', 'BaaSpread']]
+X = data1[['T10Y2Y', 'BaaSpread']]
 
 
 threshold = 0.5 # Threshold to convert predicted probabilities into binary predictions.
@@ -87,41 +88,6 @@ print("Recall:    {:.3f} ± {:.3f}".format(np.mean(gb_recs),  np.std(gb_recs)))
 print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(gb_aucs),  np.std(gb_aucs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(gb_pr_aucs), np.std(gb_pr_aucs)))
 
-# Support Vector Classifier
-svc_f1s, svc_precs, svc_recs, svc_aucs, svc_pr_aucs = [], [], [], [], []
-
-svc_clf = SVC(
-    kernel="rbf", # Creates curved decision boundaries instead of straight lines
-    C=1.0, # Controls trade-off between perfect fit vs simple model (underfitting x overfitting). C=1.0: Balanced middle ground
-    gamma="scale", # Controls RBF kernel "width"
-    probability=True, # Enables probability output
-    random_state=42 # Ensures the optimization starts training the model with the same parameters and data selection
-)
-
-for train_idx, test_idx in tscv.split(X):
-    X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
-    y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
-
-    if len(np.unique(y_te)) < 2:
-        continue
-        
-    svc_clf.fit(X_tr, y_tr)
-    svc_proba = svc_clf.predict_proba(X_te)[:, 1]
-    svc_preds = (svc_proba >= threshold).astype(int)
-
-    svc_f1s.append(f1_score(y_te, svc_preds, zero_division=0))
-    svc_precs.append(precision_score(y_te, svc_preds, zero_division=0))
-    svc_recs.append(recall_score(y_te, svc_preds, zero_division=0))
-    svc_aucs.append(roc_auc_score(y_te, svc_proba))
-    svc_pr_aucs.append(average_precision_score(y_te, svc_proba))
-
-print("\n=== 5-fold Time Series CV (SVC) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
-print("F1:        {:.3f} ± {:.3f}".format(np.mean(svc_f1s),  np.std(svc_f1s)))
-print("Precision: {:.3f} ± {:.3f}".format(np.mean(svc_precs), np.std(svc_precs)))
-print("Recall:    {:.3f} ± {:.3f}".format(np.mean(svc_recs),  np.std(svc_recs)))
-print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(svc_aucs),  np.std(svc_aucs)))
-print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(svc_pr_aucs), np.std(svc_pr_aucs)))
-
 # Random Forest Classifier
 rf_f1s, rf_precs, rf_recs, rf_aucs, rf_pr_aucs = [], [], [], [], []
 
@@ -130,7 +96,7 @@ rf_clf = RandomForestClassifier(
     max_depth=None,
     min_samples_leaf=1, # Minimum number of samples required at each leaf node
     random_state=42,
-    n_jobs=-1 # Number of CPU cores to use for parallel processing. n_jobs=-1: Use ALL available CPU cores (fastest)
+    n_jobs=-1 # Number of CPU cores to use for parallel processing. -1 means using all available cores
 )
 
 for train_idx, test_idx in tscv.split(X):
@@ -156,6 +122,35 @@ print("Precision: {:.3f} ± {:.3f}".format(np.mean(rf_precs), np.std(rf_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(rf_recs),  np.std(rf_recs)))
 print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(rf_aucs),  np.std(rf_aucs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(rf_pr_aucs), np.std(rf_pr_aucs))) 
+
+# Naive Bayes Classifier
+nb_f1s, nb_precs, nb_recs, nb_aucs, nb_pr_aucs = [], [], [], [], []
+
+nb_clf = GaussianNB()
+
+for train_idx, test_idx in tscv.split(X):
+    X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
+    y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
+
+    if len(np.unique(y_te)) < 2:
+        continue
+        
+    nb_clf.fit(X_tr, y_tr)
+    nb_proba = nb_clf.predict_proba(X_te)[:, 1]
+    nb_preds = (nb_proba >= threshold).astype(int)
+
+    nb_f1s.append(f1_score(y_te, nb_preds, zero_division=0))
+    nb_precs.append(precision_score(y_te, nb_preds, zero_division=0))
+    nb_recs.append(recall_score(y_te, nb_preds, zero_division=0))
+    nb_aucs.append(roc_auc_score(y_te, nb_proba))
+    nb_pr_aucs.append(average_precision_score(y_te, nb_proba))
+
+print("\n=== 5-fold Time Series CV (Naive Bayes) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
+print("F1:        {:.3f} ± {:.3f}".format(np.mean(nb_f1s),  np.std(nb_f1s)))
+print("Precision: {:.3f} ± {:.3f}".format(np.mean(nb_precs), np.std(nb_precs)))
+print("Recall:    {:.3f} ± {:.3f}".format(np.mean(nb_recs),  np.std(nb_recs)))
+print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(nb_aucs),  np.std(nb_aucs)))
+print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(nb_pr_aucs), np.std(nb_pr_aucs)))
 
 # Statistical significance analysis using statsmodels
 print("\n=== Statistical Significance Analysis ===")
