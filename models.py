@@ -13,39 +13,50 @@ from sklearn.metrics import (
     f1_score, precision_score, recall_score, roc_auc_score,
     average_precision_score
 )
-
+ 
 df = pd.read_excel("Data.xlsx")
 
 data1 = df[['R_12-18M', 'T10Y2Y', 'T10Y3M', 'BaaSpread', 'PERatioS&P']].dropna()
 y = data1['R_12-18M']
 X = data1[['T10Y3M', 'BaaSpread']]
 
+# Add inversion flag (1 if inverted)
+X["Inverted"] = (X["T10Y3M"] < 0).astype(int)
 
-threshold = 0.5 # Threshold to convert predicted probabilities into binary predictions.
-tscv = TimeSeriesSplit(n_splits=5) # Cross-validation strategy that creates 5 sequential train/test splits while respecting temporal order.
-# 
+threshold = 0.5 
+tscv = TimeSeriesSplit(n_splits=5)
+
 # Logit
-clf = LogisticRegression(solver="liblinear", random_state=42) # "liblinear" is a solver that uses a coordinate descent algorithm
+clf = LogisticRegression(solver="liblinear", random_state=42)
 
 f1s, precs, recs, aucs, pr_aucs = [], [], [], [], []
+f1s_inv, precs_inv, recs_inv, aucs_inv, pr_aucs_inv = [], [], [], [], []
 
 for train_idx, test_idx in tscv.split(X):
-    X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx] # Splits feature matrix X into training and testing sets using the indices provided by TimeSeriesSplit. iloc gets rows from X using the row numbers in train_idx
-    y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx] # Splits target vector y into training and testing sets using the indices provided by TimeSeriesSplit
+    X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
+    y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
 
-    if len(np.unique(y_te)) < 2: # Skip folds that can't be properly evaluated because certain machine learning metrics become mathematically undefined or meaningless when only one class is present in the test set
+    if len(np.unique(y_te)) < 2:
         continue
         
-    clf.fit(X_tr, y_tr) # Trains (fits) the logistic regression model on the training data.
-    proba = clf.predict_proba(X_te)[:, 1] # Gets the recession probabilities for the test set from the trained model.
-    
-    preds = (proba >= threshold).astype(int) # Converts probabilities into binary classifications     
+    clf.fit(X_tr[['T10Y3M', 'BaaSpread']], y_tr)
+    proba = clf.predict_proba(X_te[['T10Y3M', 'BaaSpread']])[:, 1]
+    preds = (proba >= threshold).astype(int)
 
-    f1s.append(f1_score(y_te, preds, zero_division=0)) # 'zero_division=0' -> Instead of crashing with a math error (dividing by zero), it returns 0
+    f1s.append(f1_score(y_te, preds, zero_division=0))
     precs.append(precision_score(y_te, preds, zero_division=0))
     recs.append(recall_score(y_te, preds, zero_division=0))
     aucs.append(roc_auc_score(y_te, proba))      
     pr_aucs.append(average_precision_score(y_te, proba))
+
+    # When curve inverted
+    inv_mask = X_te["Inverted"] == 1
+    if inv_mask.sum() > 0 and len(np.unique(y_te[inv_mask])) == 2:
+        f1s_inv.append(f1_score(y_te[inv_mask], preds[inv_mask], zero_division=0))
+        precs_inv.append(precision_score(y_te[inv_mask], preds[inv_mask], zero_division=0))
+        recs_inv.append(recall_score(y_te[inv_mask], preds[inv_mask], zero_division=0))
+        aucs_inv.append(roc_auc_score(y_te[inv_mask], proba[inv_mask]))
+        pr_aucs_inv.append(average_precision_score(y_te[inv_mask], proba[inv_mask]))
 
 print("\n=== 5-fold Time Series CV (Logistic Regression) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
 print("F1:        {:.3f} ± {:.3f}".format(np.mean(f1s),  np.std(f1s)))
@@ -54,14 +65,22 @@ print("Recall:    {:.3f} ± {:.3f}".format(np.mean(recs),  np.std(recs)))
 print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(aucs),  np.std(aucs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(pr_aucs), np.std(pr_aucs)))
 
+print("\nWhen Yield Curve Inverted (Slope < 0):")
+print("F1:        {:.3f} ± {:.3f}".format(np.mean(f1s_inv),  np.std(f1s_inv)))
+print("Precision: {:.3f} ± {:.3f}".format(np.mean(precs_inv), np.std(precs_inv)))
+print("Recall:    {:.3f} ± {:.3f}".format(np.mean(recs_inv),  np.std(recs_inv)))
+print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(aucs_inv),  np.std(aucs_inv)))
+print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(pr_aucs_inv), np.std(pr_aucs_inv)))
+
 # Gradient Boosting Classifier
 gb_f1s, gb_precs, gb_recs, gb_aucs, gb_pr_aucs = [], [], [], [], []
+gb_f1s_inv, gb_precs_inv, gb_recs_inv, gb_aucs_inv, gb_pr_aucs_inv = [], [], [], [], []
 
 gb_clf = GradientBoostingClassifier(
     random_state=42,
     n_estimators=300,     
-    learning_rate=0.05, # Controls how much each tree contributes to the final prediction
-    max_depth=2 # How deep each individual tree can grow. Max_depth=2: Each tree can only make 2 levels of decisions (splits)
+    learning_rate=0.05,
+    max_depth=2
 )
 
 for train_idx, test_idx in tscv.split(X):
@@ -71,8 +90,8 @@ for train_idx, test_idx in tscv.split(X):
     if len(np.unique(y_te)) < 2:
         continue
         
-    gb_clf.fit(X_tr, y_tr)
-    gb_proba = gb_clf.predict_proba(X_te)[:, 1]
+    gb_clf.fit(X_tr[['T10Y3M', 'BaaSpread']], y_tr)
+    gb_proba = gb_clf.predict_proba(X_te[['T10Y3M', 'BaaSpread']])[:, 1]
     gb_preds = (gb_proba >= threshold).astype(int)
 
     gb_f1s.append(f1_score(y_te, gb_preds, zero_division=0))
@@ -81,6 +100,14 @@ for train_idx, test_idx in tscv.split(X):
     gb_aucs.append(roc_auc_score(y_te, gb_proba))
     gb_pr_aucs.append(average_precision_score(y_te, gb_proba))
 
+    inv_mask = X_te["Inverted"] == 1
+    if inv_mask.sum() > 0 and len(np.unique(y_te[inv_mask])) == 2:
+        gb_f1s_inv.append(f1_score(y_te[inv_mask], gb_preds[inv_mask], zero_division=0))
+        gb_precs_inv.append(precision_score(y_te[inv_mask], gb_preds[inv_mask], zero_division=0))
+        gb_recs_inv.append(recall_score(y_te[inv_mask], gb_preds[inv_mask], zero_division=0))
+        gb_aucs_inv.append(roc_auc_score(y_te[inv_mask], gb_proba[inv_mask]))
+        gb_pr_aucs_inv.append(average_precision_score(y_te[inv_mask], gb_proba[inv_mask]))
+
 print("\n=== 5-fold Time Series CV (Gradient Boosting) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
 print("F1:        {:.3f} ± {:.3f}".format(np.mean(gb_f1s),  np.std(gb_f1s)))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(gb_precs), np.std(gb_precs)))
@@ -88,15 +115,23 @@ print("Recall:    {:.3f} ± {:.3f}".format(np.mean(gb_recs),  np.std(gb_recs)))
 print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(gb_aucs),  np.std(gb_aucs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(gb_pr_aucs), np.std(gb_pr_aucs)))
 
+print("\nWhen Yield Curve Inverted (Slope < 0):")
+print("F1:        {:.3f} ± {:.3f}".format(np.mean(gb_f1s_inv),  np.std(gb_f1s_inv)))
+print("Precision: {:.3f} ± {:.3f}".format(np.mean(gb_precs_inv), np.std(gb_precs_inv)))
+print("Recall:    {:.3f} ± {:.3f}".format(np.mean(gb_recs_inv),  np.std(gb_recs_inv)))
+print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(gb_aucs_inv),  np.std(gb_aucs_inv)))
+print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(gb_pr_aucs_inv), np.std(gb_pr_aucs_inv)))
+
 # Random Forest Classifier
 rf_f1s, rf_precs, rf_recs, rf_aucs, rf_pr_aucs = [], [], [], [], []
+rf_f1s_inv, rf_precs_inv, rf_recs_inv, rf_aucs_inv, rf_pr_aucs_inv = [], [], [], [], []
 
 rf_clf = RandomForestClassifier(
     n_estimators=500,
     max_depth=None,
-    min_samples_leaf=1, # Minimum number of samples required at each leaf node
+    min_samples_leaf=1,
     random_state=42,
-    n_jobs=-1 # Number of CPU cores to use for parallel processing. -1 means using all available cores
+    n_jobs=-1
 )
 
 for train_idx, test_idx in tscv.split(X):
@@ -106,26 +141,41 @@ for train_idx, test_idx in tscv.split(X):
     if len(np.unique(y_te)) < 2:
         continue
         
-    rf_clf.fit(X_tr, y_tr)
-    rf_proba = rf_clf.predict_proba(X_te)[:, 1]
+    rf_clf.fit(X_tr[['T10Y3M', 'BaaSpread']], y_tr)
+    rf_proba = rf_clf.predict_proba(X_te[['T10Y3M', 'BaaSpread']])[:, 1]
     rf_preds = (rf_proba >= threshold).astype(int)
 
     rf_f1s.append(f1_score(y_te, rf_preds, zero_division=0))
     rf_precs.append(precision_score(y_te, rf_preds, zero_division=0))
     rf_recs.append(recall_score(y_te, rf_preds, zero_division=0))
     rf_aucs.append(roc_auc_score(y_te, rf_proba))
-    rf_pr_aucs.append(average_precision_score(y_te, rf_proba)) 
+    rf_pr_aucs.append(average_precision_score(y_te, rf_proba))
+
+    inv_mask = X_te["Inverted"] == 1
+    if inv_mask.sum() > 0 and len(np.unique(y_te[inv_mask])) == 2:
+        rf_f1s_inv.append(f1_score(y_te[inv_mask], rf_preds[inv_mask], zero_division=0))
+        rf_precs_inv.append(precision_score(y_te[inv_mask], rf_preds[inv_mask], zero_division=0))
+        rf_recs_inv.append(recall_score(y_te[inv_mask], rf_preds[inv_mask], zero_division=0))
+        rf_aucs_inv.append(roc_auc_score(y_te[inv_mask], rf_proba[inv_mask]))
+        rf_pr_aucs_inv.append(average_precision_score(y_te[inv_mask], rf_proba[inv_mask]))
 
 print("\n=== 5-fold Time Series CV (Random Forest) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
 print("F1:        {:.3f} ± {:.3f}".format(np.mean(rf_f1s),  np.std(rf_f1s)))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(rf_precs), np.std(rf_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(rf_recs),  np.std(rf_recs)))
 print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(rf_aucs),  np.std(rf_aucs)))
-print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(rf_pr_aucs), np.std(rf_pr_aucs))) 
+print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(rf_pr_aucs), np.std(rf_pr_aucs)))
+
+print("\nWhen Yield Curve Inverted (Slope < 0):")
+print("F1:        {:.3f} ± {:.3f}".format(np.mean(rf_f1s_inv),  np.std(rf_f1s_inv)))
+print("Precision: {:.3f} ± {:.3f}".format(np.mean(rf_precs_inv), np.std(rf_precs_inv)))
+print("Recall:    {:.3f} ± {:.3f}".format(np.mean(rf_recs_inv),  np.std(rf_recs_inv)))
+print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(rf_aucs_inv),  np.std(rf_aucs_inv)))
+print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(rf_pr_aucs_inv), np.std(rf_pr_aucs_inv))) 
 
 # Statistical significance analysis using statsmodels
 print("\n=== Statistical Significance Analysis ===")
-X_with_const = sm.add_constant(X, has_constant='add')
+X_with_const = sm.add_constant(X[['T10Y3M', 'BaaSpread']], has_constant='add')
 logit_model = sm.Logit(y, X_with_const)
 logit_results = logit_model.fit(disp=0)
 
