@@ -16,15 +16,15 @@ from sklearn.metrics import (
 
 df = pd.read_excel("Data.xlsx")
 
-data1 = df[['R_12M', 'R_6M', 'T10Y2Y', 'T10Y3M', 'BaaSpread', 'E-Rule', 'PERatioS&P']].dropna()
-y = data1['R_12M']
-X = data1[['T10Y2Y', 'BaaSpread']]
+data1 = df[['R_12-18M', 'T10Y2Y', 'T10Y3M', 'BaaSpread', 'PERatioS&P']].dropna()
+y = data1['R_12-18M']
+X = data1[['T10Y3M', 'BaaSpread']]
 
 
 threshold = 0.5 # Threshold to convert predicted probabilities into binary predictions.
 tscv = TimeSeriesSplit(n_splits=5) # Cross-validation strategy that creates 5 sequential train/test splits while respecting temporal order.
-
-#Logit
+# 
+# Logit
 clf = LogisticRegression(solver="liblinear", random_state=42) # "liblinear" is a solver that uses a coordinate descent algorithm
 
 f1s, precs, recs, aucs, pr_aucs = [], [], [], [], []
@@ -47,7 +47,7 @@ for train_idx, test_idx in tscv.split(X):
     aucs.append(roc_auc_score(y_te, proba))      
     pr_aucs.append(average_precision_score(y_te, proba))
 
-print("\n=== 5-fold Time Series CV @ threshold = {:.2f} (mean ± std) ===".format(threshold))
+print("\n=== 5-fold Time Series CV (Logistic Regression) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
 print("F1:        {:.3f} ± {:.3f}".format(np.mean(f1s),  np.std(f1s)))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(precs), np.std(precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(recs),  np.std(recs)))
@@ -122,35 +122,6 @@ print("Precision: {:.3f} ± {:.3f}".format(np.mean(rf_precs), np.std(rf_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(rf_recs),  np.std(rf_recs)))
 print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(rf_aucs),  np.std(rf_aucs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(rf_pr_aucs), np.std(rf_pr_aucs))) 
-
-# Naive Bayes Classifier
-nb_f1s, nb_precs, nb_recs, nb_aucs, nb_pr_aucs = [], [], [], [], []
-
-nb_clf = GaussianNB()
-
-for train_idx, test_idx in tscv.split(X):
-    X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
-    y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
-
-    if len(np.unique(y_te)) < 2:
-        continue
-        
-    nb_clf.fit(X_tr, y_tr)
-    nb_proba = nb_clf.predict_proba(X_te)[:, 1]
-    nb_preds = (nb_proba >= threshold).astype(int)
-
-    nb_f1s.append(f1_score(y_te, nb_preds, zero_division=0))
-    nb_precs.append(precision_score(y_te, nb_preds, zero_division=0))
-    nb_recs.append(recall_score(y_te, nb_preds, zero_division=0))
-    nb_aucs.append(roc_auc_score(y_te, nb_proba))
-    nb_pr_aucs.append(average_precision_score(y_te, nb_proba))
-
-print("\n=== 5-fold Time Series CV (Naive Bayes) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
-print("F1:        {:.3f} ± {:.3f}".format(np.mean(nb_f1s),  np.std(nb_f1s)))
-print("Precision: {:.3f} ± {:.3f}".format(np.mean(nb_precs), np.std(nb_precs)))
-print("Recall:    {:.3f} ± {:.3f}".format(np.mean(nb_recs),  np.std(nb_recs)))
-print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(nb_aucs),  np.std(nb_aucs)))
-print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(nb_pr_aucs), np.std(nb_pr_aucs)))
 
 # Statistical significance analysis using statsmodels
 print("\n=== Statistical Significance Analysis ===")
