@@ -13,7 +13,8 @@ from sklearn.metrics import (
     f1_score, precision_score, recall_score, roc_auc_score,
     average_precision_score
 )
- 
+
+## -------- Importing Data -------- ##
 df = pd.read_excel("Data.xlsx")
 
 data1 = df[['R_12-18M', 'T10Y2Y', 'T10Y3M', 'BaaSpread', 'PERatioS&P']].dropna()
@@ -23,24 +24,55 @@ X = data1[['T10Y3M', 'BaaSpread']]
 # Add inversion flag (1 if inverted)
 X["Inverted"] = (X["T10Y3M"] < 0).astype(int)
 
-threshold = 0.5 
-tscv = TimeSeriesSplit(n_splits=5)
+# >>> Use exactly the variables in X everywhere <<<
+feature_cols = X.columns.tolist()
 
+threshold = 0.5 
+
+# Create expanding window splits manually
+def expanding_window_split(X, n_splits=5):
+    """Creates expanding window splits for time series cross-validation"""
+    n_samples = len(X)
+    splits = []
+    
+    # Calculate test size for each fold
+    test_size = n_samples // (n_splits + 1)
+    
+    for i in range(n_splits):
+        # Train on expanding window: from start to current point
+        train_end = (i + 2) * test_size
+        train_idx = np.arange(train_end)
+        
+        # Test on next period
+        test_start = train_end
+        test_end = min(test_start + test_size, n_samples)
+        test_idx = np.arange(test_start, test_end)
+        
+        if len(test_idx) > 0:  # Make sure we have test data
+            splits.append((train_idx, test_idx))
+    
+    return splits
+
+# Get expanding window splits - trains on increasing amounts of historical data
+expanding_splits = expanding_window_split(X)
+
+
+## -------- Time Series Cross-Validation for Model Evaluation -------- ##
 # Logit
 clf = LogisticRegression(solver="liblinear", random_state=42)
 
 f1s, precs, recs, aucs, pr_aucs = [], [], [], [], []
 f1s_inv, precs_inv, recs_inv, aucs_inv, pr_aucs_inv = [], [], [], [], []
 
-for train_idx, test_idx in tscv.split(X):
+for train_idx, test_idx in expanding_splits:
     X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
     y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
 
     if len(np.unique(y_te)) < 2:
         continue
         
-    clf.fit(X_tr[['T10Y3M', 'BaaSpread']], y_tr)
-    proba = clf.predict_proba(X_te[['T10Y3M', 'BaaSpread']])[:, 1]
+    clf.fit(X_tr[feature_cols], y_tr)
+    proba = clf.predict_proba(X_te[feature_cols])[:, 1]
     preds = (proba >= threshold).astype(int)
 
     f1s.append(f1_score(y_te, preds, zero_division=0))
@@ -83,15 +115,15 @@ gb_clf = GradientBoostingClassifier(
     max_depth=2
 )
 
-for train_idx, test_idx in tscv.split(X):
+for train_idx, test_idx in expanding_splits:
     X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx] 
     y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
 
     if len(np.unique(y_te)) < 2:
         continue
         
-    gb_clf.fit(X_tr[['T10Y3M', 'BaaSpread']], y_tr)
-    gb_proba = gb_clf.predict_proba(X_te[['T10Y3M', 'BaaSpread']])[:, 1]
+    gb_clf.fit(X_tr[feature_cols], y_tr)
+    gb_proba = gb_clf.predict_proba(X_te[feature_cols])[:, 1]
     gb_preds = (gb_proba >= threshold).astype(int)
 
     gb_f1s.append(f1_score(y_te, gb_preds, zero_division=0))
@@ -134,15 +166,15 @@ rf_clf = RandomForestClassifier(
     n_jobs=-1
 )
 
-for train_idx, test_idx in tscv.split(X):
+for train_idx, test_idx in expanding_splits:
     X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
     y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
 
     if len(np.unique(y_te)) < 2:
         continue
         
-    rf_clf.fit(X_tr[['T10Y3M', 'BaaSpread']], y_tr)
-    rf_proba = rf_clf.predict_proba(X_te[['T10Y3M', 'BaaSpread']])[:, 1]
+    rf_clf.fit(X_tr[feature_cols], y_tr)
+    rf_proba = rf_clf.predict_proba(X_te[feature_cols])[:, 1]
     rf_preds = (rf_proba >= threshold).astype(int)
 
     rf_f1s.append(f1_score(y_te, rf_preds, zero_division=0))
@@ -173,25 +205,30 @@ print("Recall:    {:.3f} ± {:.3f}".format(np.mean(rf_recs_inv),  np.std(rf_recs
 print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(rf_aucs_inv),  np.std(rf_aucs_inv)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(rf_pr_aucs_inv), np.std(rf_pr_aucs_inv))) 
 
-# Statistical significance analysis using statsmodels
-print("\n=== Statistical Significance Analysis ===")
-X_with_const = sm.add_constant(X[['T10Y3M', 'BaaSpread']], has_constant='add')
+## -------- Computing coefficients, marginal effects, and VIFs -------- ##
+print("\n=== Statistical Analysis ===")
+X_with_const = sm.add_constant(X[feature_cols], has_constant='add')
+
+# Logit
 logit_model = sm.Logit(y, X_with_const)
 logit_results = logit_model.fit(disp=0)
 
-print("Logistic Regression Coefficients:")
+print("\nLogistic Regression (Logit) Coefficients:")
 print(logit_results.summary2().tables[1][['Coef.', 'Std.Err.', 'z', 'P>|z|']])
 
-# Calculate odds ratios
-odds_ratios = np.exp(logit_results.params)
-print(f"\nOdds Ratios:")
-for var, or_val in odds_ratios.items():
-    if var != 'const':
-        pval = logit_results.pvalues[var]
-        significance = "***" if pval < 0.01 else "**" if pval < 0.05 else "*" if pval < 0.1 else ""
-        print(f"{var}: {or_val:.3f} {significance}")
+# Probit
+probit_model = sm.Probit(y, X_with_const)
+probit_results = probit_model.fit(disp=0)
 
-# Testing for multicolinearity
+print("\nProbit Regression Coefficients:")
+print(probit_results.summary2().tables[1][['Coef.', 'Std.Err.', 'z', 'P>|z|']])
+
+# Marginal Effects
+probit_margeff = probit_results.get_margeff(at='overall')
+print("\nProbit Average Marginal Effects (AME):")
+print(probit_margeff.summary())
+
+# Testing for Multicolinearity (VIF)
 vif_data = pd.DataFrame()
 vif_data["feature"] = X_with_const.columns
 vif_data["VIF"] = [
