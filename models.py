@@ -56,6 +56,35 @@ def expanding_window_split(X, n_splits=5):
 # Get expanding window splits - trains on increasing amounts of historical data
 expanding_splits = expanding_window_split(X)
 
+# Display fold information
+def display_fold_info(X, splits):
+    """Display training and testing periods for each fold"""
+    print(f"\n📊 CROSS-VALIDATION FOLD STRUCTURE")
+    print("=" * 70)
+    print(f"Total data points: {len(X)}")
+    
+    # Create date index if not available
+    if hasattr(X, 'index') and hasattr(X.index, 'strftime'):
+        dates = X.index
+    else:
+        # Assume monthly data from Nov 1980 to Apr 2024
+        dates = pd.date_range(start='1980-11-01', periods=len(X), freq='MS')
+    
+    for i, (train_idx, test_idx) in enumerate(splits, 1):
+        train_start = dates[0]
+        train_end = dates[train_idx[-1]]
+        test_start = dates[test_idx[0]]
+        test_end = dates[test_idx[-1]]
+        
+        print(f"\nFOLD {i}:")
+        print(f"  Training:  {train_start.strftime('%Y-%m')} to {train_end.strftime('%Y-%m')} ({len(train_idx):3d} months)")
+        print(f"  Testing:   {test_start.strftime('%Y-%m')} to {test_end.strftime('%Y-%m')} ({len(test_idx):3d} months)")
+    
+    print(f"\n✅ Total folds: {len(splits)}")
+    print("=" * 70)
+
+# Show fold structure
+display_fold_info(X, expanding_splits)
 
 ## -------- Time Series Cross-Validation for Model Evaluation -------- ##
 # Logit
