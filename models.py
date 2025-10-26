@@ -42,7 +42,7 @@ def expanding_window_split(X, n_splits=5):
         
         # Test on next period
         test_start = train_end
-        test_end = min(test_start + test_size, n_samples)
+        test_end = min(test_start + test_size, n_samples) # To prevent the test set from going beyond the available data.
         test_idx = np.arange(test_start, test_end)
         
         if len(test_idx) > 0:  # Make sure we have test data
@@ -55,9 +55,8 @@ expanding_splits = expanding_window_split(X)
 
 # Display fold information
 def display_fold_info(X, splits):
-    """Display training and testing periods for each fold"""
-    print(f"\n📊 CROSS-VALIDATION FOLD STRUCTURE")
     print("=" * 70)
+    print(f"Cross-validation Fold Structure")
     print(f"Total data points: {len(X)}")
     
     # Create date index if not available
@@ -84,15 +83,17 @@ def display_fold_info(X, splits):
 display_fold_info(X, expanding_splits)
 
 ## -------- Time Series Cross-Validation for Model Evaluation -------- ##
+
 # Logit
-clf = LogisticRegression(solver="liblinear", random_state=42)
+clf = LogisticRegression(solver="liblinear", random_state=42) #  optimization algorithm that finds the best coefficients (β values) for the logistic regression by iteratively adjusting one parameter at a time until it minimizes the prediction error on your recession data.
+# Its outputs are probabilities which are then transformed into 1 or 0 based on the treshold
 
 f1s, precs, recs, aucs, pr_aucs = [], [], [], [], []
 f1s_inv, precs_inv, recs_inv, aucs_inv, pr_aucs_inv = [], [], [], [], []
 
 for train_idx, test_idx in expanding_splits:
-    X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
-    y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
+    X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx] # Selecting training and testing data for the explanatory variables based on indices set on expanding_splits function
+    y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx] # Selecting training and testing data for the dependent variable based on indices set on expanding_splits function
 
     if len(np.unique(y_te)) < 2:
         continue
