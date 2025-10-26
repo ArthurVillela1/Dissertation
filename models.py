@@ -6,42 +6,39 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, roc_auc_score, f1_score, precision_score, recall_score
 import numpy as np
 from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.naive_bayes import GaussianNB
 from sklearn.metrics import (
     f1_score, precision_score, recall_score, roc_auc_score,
     average_precision_score
 )
 
-## -------- Importing Data -------- ##
+#### ---------------------------- Importing Data ---------------------------- ####
 df = pd.read_excel("Data.xlsx")
 
 data1 = df[['R_12-18M', 'T10Y2Y', 'T10Y3M', 'BaaSpread', 'PERatioS&P']].dropna()
 y = data1['R_12-18M']
 X = data1[['T10Y3M', 'BaaSpread']]
 
-# Add inversion flag (1 if inverted)
-X["Inverted"] = (X["T10Y3M"] < 0).astype(int)
+# Inversion flag (1 if inverted) based on first column of X
+X["Inverted"] = (X.iloc[:, 0] < 0).astype(int)
 
-# >>> Use exactly the variables in X everywhere <<<
+# Use exactly the variables in X everywhere
 feature_cols = X.columns.tolist()
 
-threshold = 0.5 
+threshold = 0.5 # Threshold to convert predicted probabilities into binary predictions.
 
-# Create expanding window splits manually
+# Creating expanding window splits for time series cross-validation
 def expanding_window_split(X, n_splits=5):
-    """Creates expanding window splits for time series cross-validation"""
     n_samples = len(X)
     splits = []
     
     # Calculate test size for each fold
-    test_size = n_samples // (n_splits + 1)
+    test_size = n_samples // (n_splits + 1) # Train on 4 increasing folds and test on the next one
     
     for i in range(n_splits):
         # Train on expanding window: from start to current point
-        train_end = (i + 2) * test_size
-        train_idx = np.arange(train_end)
+        train_end = (i + 2) * test_size # Begin training with 2 folds and add it from there
+        train_idx = np.arange(train_end) # Create a sequence of numbers from 0 to train_end - 1
         
         # Test on next period
         test_start = train_end
