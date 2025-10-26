@@ -81,7 +81,7 @@ def display_fold_info(X, splits):
 # Show fold structure
 display_fold_info(X, expanding_splits)
 
-## -------- Time Series Cross-Validation for Model Evaluation -------- ##
+#### ----------------------------  Time Series Cross-Validation for Model Evaluation ---------------------------- ####
 
 # Logit
 clf = LogisticRegression(solver="liblinear", random_state=42) #  optimization algorithm that finds the best coefficients (β values) for the logistic regression by iteratively adjusting one parameter at a time until it minimizes the prediction error on your recession data.
@@ -117,17 +117,13 @@ for train_idx, test_idx in expanding_splits:
         pr_aucs_inv.append(average_precision_score(y_te[inv_mask], proba[inv_mask]))
 
 print("\n=== 5-fold Time Series CV (Logistic Regression) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
-print("F1:        {:.3f} ± {:.3f}".format(np.mean(f1s),  np.std(f1s)))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(precs), np.std(precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(recs),  np.std(recs)))
-print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(aucs),  np.std(aucs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(pr_aucs), np.std(pr_aucs)))
 
 print("\nWhen Yield Curve Inverted (Slope < 0):")
-print("F1:        {:.3f} ± {:.3f}".format(np.mean(f1s_inv),  np.std(f1s_inv)))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(precs_inv), np.std(precs_inv)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(recs_inv),  np.std(recs_inv)))
-print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(aucs_inv),  np.std(aucs_inv)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(pr_aucs_inv), np.std(pr_aucs_inv)))
 
 # Probit Classifier (using statsmodels for consistency with statistical analysis)
@@ -166,17 +162,13 @@ for train_idx, test_idx in expanding_splits:
         probit_pr_aucs_inv.append(average_precision_score(y_te[inv_mask], probit_proba[inv_mask]))
 
 print("\n=== 5-fold Time Series CV (Probit) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
-print("F1:        {:.3f} ± {:.3f}".format(np.mean(probit_f1s),  np.std(probit_f1s)))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(probit_precs), np.std(probit_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(probit_recs),  np.std(probit_recs)))
-print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(probit_aucs),  np.std(probit_aucs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(probit_pr_aucs), np.std(probit_pr_aucs)))
 
 print("\nWhen Yield Curve Inverted (Slope < 0):")
-print("F1:        {:.3f} ± {:.3f}".format(np.mean(probit_f1s_inv),  np.std(probit_f1s_inv)))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(probit_precs_inv), np.std(probit_precs_inv)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(probit_recs_inv),  np.std(probit_recs_inv)))
-print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(probit_aucs_inv),  np.std(probit_aucs_inv)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(probit_pr_aucs_inv), np.std(probit_pr_aucs_inv)))
 
 # Gradient Boosting Classifier
@@ -216,17 +208,13 @@ for train_idx, test_idx in expanding_splits:
         gb_pr_aucs_inv.append(average_precision_score(y_te[inv_mask], gb_proba[inv_mask]))
 
 print("\n=== 5-fold Time Series CV (Gradient Boosting) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
-print("F1:        {:.3f} ± {:.3f}".format(np.mean(gb_f1s),  np.std(gb_f1s)))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(gb_precs), np.std(gb_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(gb_recs),  np.std(gb_recs)))
-print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(gb_aucs),  np.std(gb_aucs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(gb_pr_aucs), np.std(gb_pr_aucs)))
 
 print("\nWhen Yield Curve Inverted (Slope < 0):")
-print("F1:        {:.3f} ± {:.3f}".format(np.mean(gb_f1s_inv),  np.std(gb_f1s_inv)))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(gb_precs_inv), np.std(gb_precs_inv)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(gb_recs_inv),  np.std(gb_recs_inv)))
-print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(gb_aucs_inv),  np.std(gb_aucs_inv)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(gb_pr_aucs_inv), np.std(gb_pr_aucs_inv)))
 
 # Random Forest Classifier
@@ -267,20 +255,17 @@ for train_idx, test_idx in expanding_splits:
         rf_pr_aucs_inv.append(average_precision_score(y_te[inv_mask], rf_proba[inv_mask]))
 
 print("\n=== 5-fold Time Series CV (Random Forest) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
-print("F1:        {:.3f} ± {:.3f}".format(np.mean(rf_f1s),  np.std(rf_f1s)))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(rf_precs), np.std(rf_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(rf_recs),  np.std(rf_recs)))
-print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(rf_aucs),  np.std(rf_aucs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(rf_pr_aucs), np.std(rf_pr_aucs)))
 
 print("\nWhen Yield Curve Inverted (Slope < 0):")
-print("F1:        {:.3f} ± {:.3f}".format(np.mean(rf_f1s_inv),  np.std(rf_f1s_inv)))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(rf_precs_inv), np.std(rf_precs_inv)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(rf_recs_inv),  np.std(rf_recs_inv)))
-print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(rf_aucs_inv),  np.std(rf_aucs_inv)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(rf_pr_aucs_inv), np.std(rf_pr_aucs_inv))) 
 
-## -------- Computing coefficients, marginal effects, and VIFs -------- ##
+## ---------------------------- Computing coefficients, marginal effects, and VIFs ---------------------------- ##
+
 print("\n=== Statistical Analysis ===")
 X_with_const = sm.add_constant(X[feature_cols], has_constant='add')
 
