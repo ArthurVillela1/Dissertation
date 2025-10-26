@@ -1,9 +1,8 @@
 import pandas as pd
 import statsmodels.api as sm
-from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score, TimeSeriesSplit
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, roc_auc_score, f1_score, precision_score, recall_score
+from sklearn.metrics import roc_auc_score, f1_score, precision_score, recall_score
 import numpy as np
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.ensemble import RandomForestClassifier
@@ -130,6 +129,55 @@ print("Precision: {:.3f} ± {:.3f}".format(np.mean(precs_inv), np.std(precs_inv)
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(recs_inv),  np.std(recs_inv)))
 print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(aucs_inv),  np.std(aucs_inv)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(pr_aucs_inv), np.std(pr_aucs_inv)))
+
+# Probit Classifier (using statsmodels for consistency with statistical analysis)
+probit_f1s, probit_precs, probit_recs, probit_aucs, probit_pr_aucs = [], [], [], [], []
+probit_f1s_inv, probit_precs_inv, probit_recs_inv, probit_aucs_inv, probit_pr_aucs_inv = [], [], [], [], []
+
+for train_idx, test_idx in expanding_splits:
+    X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
+    y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
+
+    if len(np.unique(y_te)) < 2:
+        continue
+        
+    # Add constant for statsmodels probit
+    X_tr_const = sm.add_constant(X_tr[feature_cols], has_constant='add')
+    X_te_const = sm.add_constant(X_te[feature_cols], has_constant='add')
+    
+    probit_model = sm.Probit(y_tr, X_tr_const)
+    probit_result = probit_model.fit(disp=0)
+    
+    probit_proba = probit_result.predict(X_te_const)
+    probit_preds = (probit_proba >= threshold).astype(int)
+
+    probit_f1s.append(f1_score(y_te, probit_preds, zero_division=0))
+    probit_precs.append(precision_score(y_te, probit_preds, zero_division=0))
+    probit_recs.append(recall_score(y_te, probit_preds, zero_division=0))
+    probit_aucs.append(roc_auc_score(y_te, probit_proba))
+    probit_pr_aucs.append(average_precision_score(y_te, probit_proba))
+
+    inv_mask = X_te["Inverted"] == 1
+    if inv_mask.sum() > 0 and len(np.unique(y_te[inv_mask])) == 2:
+        probit_f1s_inv.append(f1_score(y_te[inv_mask], probit_preds[inv_mask], zero_division=0))
+        probit_precs_inv.append(precision_score(y_te[inv_mask], probit_preds[inv_mask], zero_division=0))
+        probit_recs_inv.append(recall_score(y_te[inv_mask], probit_preds[inv_mask], zero_division=0))
+        probit_aucs_inv.append(roc_auc_score(y_te[inv_mask], probit_proba[inv_mask]))
+        probit_pr_aucs_inv.append(average_precision_score(y_te[inv_mask], probit_proba[inv_mask]))
+
+print("\n=== 5-fold Time Series CV (Probit) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
+print("F1:        {:.3f} ± {:.3f}".format(np.mean(probit_f1s),  np.std(probit_f1s)))
+print("Precision: {:.3f} ± {:.3f}".format(np.mean(probit_precs), np.std(probit_precs)))
+print("Recall:    {:.3f} ± {:.3f}".format(np.mean(probit_recs),  np.std(probit_recs)))
+print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(probit_aucs),  np.std(probit_aucs)))
+print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(probit_pr_aucs), np.std(probit_pr_aucs)))
+
+print("\nWhen Yield Curve Inverted (Slope < 0):")
+print("F1:        {:.3f} ± {:.3f}".format(np.mean(probit_f1s_inv),  np.std(probit_f1s_inv)))
+print("Precision: {:.3f} ± {:.3f}".format(np.mean(probit_precs_inv), np.std(probit_precs_inv)))
+print("Recall:    {:.3f} ± {:.3f}".format(np.mean(probit_recs_inv),  np.std(probit_recs_inv)))
+print("ROC AUC:   {:.3f} ± {:.3f}".format(np.mean(probit_aucs_inv),  np.std(probit_aucs_inv)))
+print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(probit_pr_aucs_inv), np.std(probit_pr_aucs_inv)))
 
 # Gradient Boosting Classifier
 gb_f1s, gb_precs, gb_recs, gb_aucs, gb_pr_aucs = [], [], [], [], []
