@@ -310,11 +310,18 @@ print(f"SPF data shape: {spf_data.shape}")
 print(f"SPF unique values: {spf_data['SPF'].unique()}")
 spf_precision = precision_score(spf_data['R_12-18M'], spf_data['SPF'], zero_division=0)
 
-# Your models' average precision (properly weighted)
+# Models' average precision 
 all_precisions = precs + probit_precs + gb_precs + rf_precs
-your_avg_precision = np.mean(all_precisions)
+all_precisions_inv = precs_inv + probit_precs_inv + gb_precs_inv + rf_precs_inv
+model_avg_precision = np.mean(all_precisions)
+model_avg_precision_inv = np.mean(all_precisions_inv)
 
-print(f"\nPRECISION COMPARISON:")
+print(f"\nPrecision Comparison:")
 print(f"SPF: {spf_precision:.3f}")
-print(f"Your Models (avg): {your_avg_precision:.3f}")
-print(f"Difference: {your_avg_precision - spf_precision:+.3f}")
+print(f"Models (avg): {model_avg_precision:.3f}")
+print(f"Difference: {model_avg_precision - spf_precision:+.3f}")
+
+print(f"\nPrecision Comparison (Inverted Yield Curve):")
+print(f"SPF: {spf_precision:.3f}")
+print(f"Models (avg): {model_avg_precision_inv:.3f}")
+print(f"Difference: {model_avg_precision_inv - spf_precision:+.3f}")
