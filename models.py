@@ -24,7 +24,8 @@ X["Inverted"] = (X.iloc[:, 0] < 0).astype(int)
 # Use exactly the variables in X everywhere
 feature_cols = X.columns.tolist()
 
-threshold = 0.5 # Threshold to convert predicted probabilities into binary predictions.
+# Threshold to convert predicted probabilities into binary predictions.
+threshold = 0.5 
 
 # Creating expanding window splits for time series cross-validation
 def expanding_window_split(X, n_splits=5):
@@ -298,3 +299,22 @@ vif_data["VIF"] = [
 
 print("\n=== Variance Inflation Factors (VIF) ===")
 print(vif_data[vif_data["feature"] != "const"])
+
+#### ---------------------------- SPF Benchmark ---------------------------- ####
+
+# SPF precision
+df_spf = pd.read_excel("Data.xlsx")
+spf_data = df_spf[['R_12-18M', 'SPF']].dropna()
+print(spf_data)
+print(f"SPF data shape: {spf_data.shape}")
+print(f"SPF unique values: {spf_data['SPF'].unique()}")
+spf_precision = precision_score(spf_data['R_12-18M'], spf_data['SPF'], zero_division=0)
+
+# Your models' average precision (properly weighted)
+all_precisions = precs + probit_precs + gb_precs + rf_precs
+your_avg_precision = np.mean(all_precisions)
+
+print(f"\nPRECISION COMPARISON:")
+print(f"SPF: {spf_precision:.3f}")
+print(f"Your Models (avg): {your_avg_precision:.3f}")
+print(f"Difference: {your_avg_precision - spf_precision:+.3f}")
