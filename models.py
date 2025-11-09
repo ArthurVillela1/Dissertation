@@ -11,12 +11,12 @@ from sklearn.metrics import (
     average_precision_score
 )
 
-#### ---------------------------- Importing Data ---------------------------- ####
+#### ============================ Importing Data ============================ ####
 df = pd.read_excel("Data.xlsx")
 
 data1 = df[['R_12-18M', 'T10Y2Y', 'T10Y3M', 'BaaSpread', 'PERatioS&P']].dropna()
 y = data1['R_12-18M']
-X = data1[['T10Y3M', 'BaaSpread']]
+X = data1[['T10Y2Y']]
 
 # Inversion flag (1 if inverted) based on first column of X
 X["Inverted"] = (X.iloc[:, 0] < 0).astype(int)
@@ -82,7 +82,7 @@ def display_fold_info(X, splits):
 # Show fold structure
 display_fold_info(X, expanding_splits)
 
-#### ----------------------------  Time Series Cross-Validation for Model Evaluation ---------------------------- ####
+#### ============================  Time Series Cross-Validation for Model Evaluation ============================ ####
 
 # Logit
 clf = LogisticRegression(solver="liblinear", random_state=42) #  optimization algorithm that finds the best coefficients (β values) for the logistic regression by iteratively adjusting one parameter at a time until it minimizes the prediction error on your recession data.
@@ -117,7 +117,7 @@ for train_idx, test_idx in expanding_splits:
         aucs_inv.append(roc_auc_score(y_te[inv_mask], proba[inv_mask]))
         pr_aucs_inv.append(average_precision_score(y_te[inv_mask], proba[inv_mask]))
 
-print("\n=== 5-fold Time Series CV (Logistic Regression) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
+print("\n=== 4-fold Time Series CV (Logistic Regression) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(precs), np.std(precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(recs),  np.std(recs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(pr_aucs), np.std(pr_aucs)))
@@ -162,7 +162,7 @@ for train_idx, test_idx in expanding_splits:
         probit_aucs_inv.append(roc_auc_score(y_te[inv_mask], probit_proba[inv_mask]))
         probit_pr_aucs_inv.append(average_precision_score(y_te[inv_mask], probit_proba[inv_mask]))
 
-print("\n=== 5-fold Time Series CV (Probit) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
+print("\n=== 4-fold Time Series CV (Probit) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(probit_precs), np.std(probit_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(probit_recs),  np.std(probit_recs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(probit_pr_aucs), np.std(probit_pr_aucs)))
@@ -208,7 +208,7 @@ for train_idx, test_idx in expanding_splits:
         gb_aucs_inv.append(roc_auc_score(y_te[inv_mask], gb_proba[inv_mask]))
         gb_pr_aucs_inv.append(average_precision_score(y_te[inv_mask], gb_proba[inv_mask]))
 
-print("\n=== 5-fold Time Series CV (Gradient Boosting) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
+print("\n=== 4-fold Time Series CV (Gradient Boosting) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(gb_precs), np.std(gb_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(gb_recs),  np.std(gb_recs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(gb_pr_aucs), np.std(gb_pr_aucs)))
@@ -255,7 +255,7 @@ for train_idx, test_idx in expanding_splits:
         rf_aucs_inv.append(roc_auc_score(y_te[inv_mask], rf_proba[inv_mask]))
         rf_pr_aucs_inv.append(average_precision_score(y_te[inv_mask], rf_proba[inv_mask]))
 
-print("\n=== 5-fold Time Series CV (Random Forest) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
+print("\n=== 4-fold Time Series CV (Random Forest) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(rf_precs), np.std(rf_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(rf_recs),  np.std(rf_recs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(rf_pr_aucs), np.std(rf_pr_aucs)))
@@ -265,7 +265,7 @@ print("Precision: {:.3f} ± {:.3f}".format(np.mean(rf_precs_inv), np.std(rf_prec
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(rf_recs_inv),  np.std(rf_recs_inv)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(rf_pr_aucs_inv), np.std(rf_pr_aucs_inv))) 
 
-## ---------------------------- Computing coefficients, marginal effects, and VIFs ---------------------------- ##
+## ============================ Computing coefficients, marginal effects, and VIFs ============================ ##
 
 print("\n=== Statistical Analysis ===")
 X_with_const = sm.add_constant(X[feature_cols], has_constant='add')
@@ -300,14 +300,14 @@ vif_data["VIF"] = [
 print("\n=== Variance Inflation Factors (VIF) ===")
 print(vif_data[vif_data["feature"] != "const"])
 
-#### ---------------------------- SPF Benchmark ---------------------------- ####
+#### ============================ SPF Benchmark ============================ ####
 
 # SPF precision
 df_spf = pd.read_excel("Data.xlsx")
 spf_data = df_spf[['R_12-18M', 'SPF']].dropna()
-print(spf_data)
-print(f"SPF data shape: {spf_data.shape}")
-print(f"SPF unique values: {spf_data['SPF'].unique()}")
+#print(spf_data)
+#print(f"SPF data shape: {spf_data.shape}")
+#print(f"SPF unique values: {spf_data['SPF'].unique()}")
 spf_precision = precision_score(spf_data['R_12-18M'], spf_data['SPF'], zero_division=0)
 
 # Models' average precision 
