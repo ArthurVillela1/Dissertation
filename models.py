@@ -16,13 +16,13 @@ df = pd.read_excel("Data.xlsx")
 
 data1 = df[['R_12-18M', 'T10Y2Y', 'T10Y3M', 'BaaSpread', 'PERatioS&P']].dropna()
 y = data1['R_12-18M']
-X = data1[['T10Y2Y']]
+X = data1[['T10Y2Y', 'BaaSpread']]
 
-# Inversion flag (1 if inverted) based on first column of X
-X["Inverted"] = (X.iloc[:, 0] < 0).astype(int)
-
-# Use exactly the variables in X everywhere
+# Preserve the original feature list (these will be the columns used for training).
 feature_cols = X.columns.tolist()
+
+# Inversion flag (1 if inverted) based on the first column of X (the slope measure)
+X["Inverted"] = (X.iloc[:, 0] < 0).astype(int)
 
 # Threshold to convert predicted probabilities into binary predictions.
 threshold = 0.5 
