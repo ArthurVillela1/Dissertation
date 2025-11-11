@@ -77,7 +77,6 @@ def display_fold_info(X, splits):
     print(f"\n✅ Total folds: {len(splits)}")
     print("=" * 70)
 
-# Show fold structure
 display_fold_info(X, expanding_splits)
 
 #### ============================  Time Series Cross-Validation for Model Evaluation ============================ ####
