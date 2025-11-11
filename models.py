@@ -29,16 +29,6 @@ threshold = 0.5
 
 #### ============================ Creating expanding window splits ============================ ####
 def expanding_window_split(X, n_splits=5):
-    """Create expanding-window train/test splits while avoiding tiny final test windows.
-
-    This implementation splits the full index range into (n_splits + 2) approximately
-    equal blocks using numpy.array_split. Then for fold i (0-based) the training
-    set is the concatenation of blocks[0]..blocks[i+1] and the test set is blocks[i+2].
-
-    This preserves the expanding-window logic (start with two blocks for training
-    and test on the next block) but ensures the last test block is not a tiny
-    remainder when n_samples is not divisible by (n_splits+1).
-    """
     n_samples = len(X)
     splits = []
 
@@ -49,12 +39,12 @@ def expanding_window_split(X, n_splits=5):
         train_blocks = blocks[: i + 2] # Training with the first (i+2) blocks. blocks[: i + 2] is a slice of the list 'blocks' -> block[:2] = [B0, B1]
         if len(train_blocks) == 0:
             continue
-        train_idx = np.concatenate(train_blocks)
+        train_idx = np.concatenate(train_blocks) # Transform two separate blocks into one
 
         test_idx = blocks[i + 2] # Testing with the block after the training blocks. blocks[i + 2] is an index access into 'block' -> blocks[0+2] = B2
 
-        if len(test_idx) > 0:
-            splits.append((train_idx, test_idx))
+        if len(test_idx) > 0: # Checking for two classes in testing set
+            splits.append((train_idx, test_idx)) # Append the train and test indices as a tuple to the splits list
 
     return splits
 
