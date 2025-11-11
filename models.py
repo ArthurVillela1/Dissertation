@@ -29,29 +29,40 @@ threshold = 0.5
 
 # Creating expanding window splits for time series cross-validation
 def expanding_window_split(X, n_splits=5):
+    """Create expanding-window train/test splits while avoiding tiny final test windows.
+
+    This implementation splits the full index range into (n_splits + 2) approximately
+    equal blocks using numpy.array_split. Then for fold i (0-based) the training
+    set is the concatenation of blocks[0]..blocks[i+1] and the test set is blocks[i+2].
+
+    This preserves the expanding-window logic (start with two blocks for training
+    and test on the next block) but ensures the last test block is not a tiny
+    remainder when n_samples is not divisible by (n_splits+1).
+    """
     n_samples = len(X)
     splits = []
-    
-    # Calculate test size for each fold
-    test_size = n_samples // (n_splits + 1) # Train on 4 increasing folds and test on the next one
-    
+
+    # Split indices into (n_splits + 2) nearly-equal blocks so we have enough
+    # blocks for the expanding-train + test pattern for n_splits folds.
+    blocks = np.array_split(np.arange(n_samples), n_splits + 2)
+
     for i in range(n_splits):
-        # Train on expanding window: from start to current point
-        train_end = (i + 2) * test_size # Begin training with 2 folds and add it from there
-        train_idx = np.arange(train_end) # Create a sequence of numbers from 0 to train_end - 1
-        
-        # Test on next period
-        test_start = train_end
-        test_end = min(test_start + test_size, n_samples) # To prevent the test set from going beyond the available data.
-        test_idx = np.arange(test_start, test_end)
-        
-        if len(test_idx) > 0:  # Make sure we have test data
+        # training uses the first (i+2) blocks
+        train_blocks = blocks[: i + 2]
+        if len(train_blocks) == 0:
+            continue
+        train_idx = np.concatenate(train_blocks)
+
+        # test is the next block (i+2)
+        test_idx = blocks[i + 2]
+
+        if len(test_idx) > 0:
             splits.append((train_idx, test_idx))
-    
+
     return splits
 
 # Get expanding window splits - trains on increasing amounts of historical data
-expanding_splits = expanding_window_split(X)
+expanding_splits = expanding_window_split(X, n_splits=3)
 
 # Display fold information
 def display_fold_info(X, splits):
@@ -117,7 +128,7 @@ for train_idx, test_idx in expanding_splits:
         aucs_inv.append(roc_auc_score(y_te[inv_mask], proba[inv_mask]))
         pr_aucs_inv.append(average_precision_score(y_te[inv_mask], proba[inv_mask]))
 
-print("\n=== 4-fold Time Series CV (Logistic Regression) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
+print("\n=== {}-fold Time Series CV (Logistic Regression) @ threshold = {:.2f} (mean ± std) ===".format(len(expanding_splits), threshold))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(precs), np.std(precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(recs),  np.std(recs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(pr_aucs), np.std(pr_aucs)))
@@ -162,7 +173,7 @@ for train_idx, test_idx in expanding_splits:
         probit_aucs_inv.append(roc_auc_score(y_te[inv_mask], probit_proba[inv_mask]))
         probit_pr_aucs_inv.append(average_precision_score(y_te[inv_mask], probit_proba[inv_mask]))
 
-print("\n=== 4-fold Time Series CV (Probit) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
+print("\n=== {}-fold Time Series CV (Probit) @ threshold = {:.2f} (mean ± std) ===".format(len(expanding_splits), threshold))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(probit_precs), np.std(probit_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(probit_recs),  np.std(probit_recs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(probit_pr_aucs), np.std(probit_pr_aucs)))
@@ -208,7 +219,7 @@ for train_idx, test_idx in expanding_splits:
         gb_aucs_inv.append(roc_auc_score(y_te[inv_mask], gb_proba[inv_mask]))
         gb_pr_aucs_inv.append(average_precision_score(y_te[inv_mask], gb_proba[inv_mask]))
 
-print("\n=== 4-fold Time Series CV (Gradient Boosting) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
+print("\n=== {}-fold Time Series CV (Gradient Boosting) @ threshold = {:.2f} (mean ± std) ===".format(len(expanding_splits), threshold))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(gb_precs), np.std(gb_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(gb_recs),  np.std(gb_recs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(gb_pr_aucs), np.std(gb_pr_aucs)))
@@ -255,7 +266,7 @@ for train_idx, test_idx in expanding_splits:
         rf_aucs_inv.append(roc_auc_score(y_te[inv_mask], rf_proba[inv_mask]))
         rf_pr_aucs_inv.append(average_precision_score(y_te[inv_mask], rf_proba[inv_mask]))
 
-print("\n=== 4-fold Time Series CV (Random Forest) @ threshold = {:.2f} (mean ± std) ===".format(threshold))
+print("\n=== {}-fold Time Series CV (Random Forest) @ threshold = {:.2f} (mean ± std) ===".format(len(expanding_splits), threshold))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(rf_precs), np.std(rf_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(rf_recs),  np.std(rf_recs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(rf_pr_aucs), np.std(rf_pr_aucs)))
@@ -325,3 +336,29 @@ print(f"\nPrecision Comparison (Inverted Yield Curve):")
 print(f"SPF: {spf_precision:.3f}")
 print(f"Models (avg): {model_avg_precision_inv:.3f}")
 print(f"Difference: {model_avg_precision_inv - spf_precision:+.3f}")
+
+
+## ============================ Per-fold Precision & Recall (separate) ============================
+print("\n=== Per-fold Precision & Recall (by model) ===")
+
+def _print_per_fold(name, precs_list, recs_list):
+    if len(precs_list) == 0 and len(recs_list) == 0:
+        print(f"\n{name}: No valid folds (no recorded precision/recall).")
+        return
+    # Use the length of the precision list (they should match recalls per model)
+    n = max(len(precs_list), len(recs_list))
+    print(f"\n{name} (n_valid_folds = {n}):")
+    for i in range(n):
+        p = precs_list[i] if i < len(precs_list) else float('nan')
+        r = recs_list[i] if i < len(recs_list) else float('nan')
+        if np.isnan(p) and np.isnan(r):
+            print(f"  Fold {i+1}: no metric")
+        else:
+            print(f"  Fold {i+1}: Precision = {p:.3f}, Recall = {r:.3f}")
+
+# Print per-fold precision & recall for each model
+_print_per_fold('Logistic Regression', precs, recs)
+_print_per_fold('Probit', probit_precs, probit_recs)
+_print_per_fold('Gradient Boosting', gb_precs, gb_recs)
+_print_per_fold('Random Forest', rf_precs, rf_recs)
+
