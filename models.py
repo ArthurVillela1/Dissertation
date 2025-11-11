@@ -89,8 +89,8 @@ f1s, precs, recs, aucs, pr_aucs = [], [], [], [], []
 f1s_inv, precs_inv, recs_inv, aucs_inv, pr_aucs_inv = [], [], [], [], []
 
 for train_idx, test_idx in expanding_splits:
-    X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx] # Selecting training and testing data for the explanatory variables based on indices set on expanding_splits function
-    y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx] # Selecting training and testing data for the dependent variable based on indices set on expanding_splits function
+    X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx] # Selecting training and testing data rows for the explanatory variables based on indices set on expanding_splits function
+    y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx] # Selecting training and testing data rows for the dependent variable based on indices set on expanding_splits function
 
     if len(np.unique(y_te)) < 2: #  # Skip folds that can't be properly evaluated (e.g., only one class) because certain machine learning metrics become mathematically undefined or meaningless when only one class is present in the test set
         continue
@@ -107,7 +107,7 @@ for train_idx, test_idx in expanding_splits:
 
     # When curve inverted
     inv_mask = X_te["Inverted"] == 1
-    if inv_mask.sum() > 0 and len(np.unique(y_te[inv_mask])) == 2: # Check if there are at least one inverted period on the inv_mask and if both classes are present on the testing data for the dependent variable        
+    if inv_mask.sum() > 0 and len(np.unique(y_te[inv_mask])) == 2: # Check if there are at least one inverted periods on the inv_mask and if both classes are present on the testing data for the dependent variable        
         f1s_inv.append(f1_score(y_te[inv_mask], preds[inv_mask], zero_division=0))
         precs_inv.append(precision_score(y_te[inv_mask], preds[inv_mask], zero_division=0))
         recs_inv.append(recall_score(y_te[inv_mask], preds[inv_mask], zero_division=0))
@@ -135,7 +135,7 @@ for train_idx, test_idx in expanding_splits:
     if len(np.unique(y_te)) < 2:
         continue
         
-    # Add constant for statsmodels probit
+    # Addding constant because sklearn automatically includes an intercept while statsmodels doesn't
     X_tr_const = sm.add_constant(X_tr[feature_cols], has_constant='add')
     X_te_const = sm.add_constant(X_te[feature_cols], has_constant='add')
     
@@ -174,7 +174,7 @@ gb_f1s, gb_precs, gb_recs, gb_aucs, gb_pr_aucs = [], [], [], [], []
 gb_f1s_inv, gb_precs_inv, gb_recs_inv, gb_aucs_inv, gb_pr_aucs_inv = [], [], [], [], []
 
 gb_clf = GradientBoostingClassifier(
-    random_state=42, # seed value that makes your machine learning results reproducible by controlling randomness (e.g., same initialization, convergence path, etc.))
+    random_state=42, # Seed value that makes your machine learning results reproducible by controlling randomness (e.g., same initialization, convergence path, etc.))
     n_estimators=300, # Number of boosting stages (trees) to be built     
     learning_rate=0.05, # Controls how much each tree contributes to the final prediction
     max_depth=2 # How deep each individual tree can grow. Max_depth=2: Each tree can only make 2 levels of decisions (splits)
