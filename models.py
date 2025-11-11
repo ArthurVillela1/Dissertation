@@ -18,16 +18,16 @@ data1 = df[['R_12-18M', 'T10Y2Y', 'T10Y3M', 'BaaSpread', 'PERatioS&P']].dropna()
 y = data1['R_12-18M']
 X = data1[['T10Y2Y', 'BaaSpread']]
 
-# Preserve the original feature list (these will be the columns used for training).
+# Columns used for training
 feature_cols = X.columns.tolist()
 
 # Inversion flag (1 if inverted) based on the first column of X (the slope measure)
-X["Inverted"] = (X.iloc[:, 0] < 0).astype(int)
+X["Inverted"] = (X.iloc[:, 0] < 0).astype(int) # Create a new column "Inverted" in X that is 1 when the first feature (T10Y2Y) is negative (inverted yield curve) and 0 otherwise
 
 # Threshold to convert predicted probabilities into binary predictions.
 threshold = 0.5 
 
-# Creating expanding window splits for time series cross-validation
+#### ============================ Creating expanding window splits ============================ ####
 def expanding_window_split(X, n_splits=5):
     """Create expanding-window train/test splits while avoiding tiny final test windows.
 
@@ -42,19 +42,16 @@ def expanding_window_split(X, n_splits=5):
     n_samples = len(X)
     splits = []
 
-    # Split indices into (n_splits + 2) nearly-equal blocks so we have enough
-    # blocks for the expanding-train + test pattern for n_splits folds.
+    # Split indices into (n_splits + 2) nearly-equal blocks so there is enough for training and testing
     blocks = np.array_split(np.arange(n_samples), n_splits + 2)
 
     for i in range(n_splits):
-        # training uses the first (i+2) blocks
-        train_blocks = blocks[: i + 2]
+        train_blocks = blocks[: i + 2] # Training with the first (i+2) blocks. blocks[: i + 2] is a slice of the list 'blocks' -> block[:2] = [B0, B1]
         if len(train_blocks) == 0:
             continue
         train_idx = np.concatenate(train_blocks)
 
-        # test is the next block (i+2)
-        test_idx = blocks[i + 2]
+        test_idx = blocks[i + 2] # Testing with the block after the training blocks. blocks[i + 2] is an index access into 'block' -> blocks[0+2] = B2
 
         if len(test_idx) > 0:
             splits.append((train_idx, test_idx))
@@ -338,7 +335,7 @@ print(f"Models (avg): {model_avg_precision_inv:.3f}")
 print(f"Difference: {model_avg_precision_inv - spf_precision:+.3f}")
 
 
-## ============================ Per-fold Precision & Recall (separate) ============================
+#### ============================ Per-fold Precision & Recall ============================ ####
 print("\n=== Per-fold Precision & Recall (by model) ===")
 
 def _print_per_fold(name, precs_list, recs_list):
