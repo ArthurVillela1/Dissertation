@@ -12,6 +12,8 @@ from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from scipy.stats import ttest_1samp
 import matplotlib.pyplot as plt
 
+## ================================================== Data Handling and Threshold definition ================================================== ##
+
 df = pd.read_excel("Data.xlsx")
 print(df)
 
@@ -20,9 +22,7 @@ y = data1['R_12-18M']
 X = data1[['T10Y3M', 'PERatioS&P', 'BaaSpread']].copy()
 
 feature_cols = X.columns.tolist()
-
 X["Inverted"] = (X.iloc[:, 0] < 0).astype(int)
-
 threshold = 0.5
 
 ## ================================================== Cross Validation Functions ================================================== ##
