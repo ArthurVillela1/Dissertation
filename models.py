@@ -153,7 +153,7 @@ for train_idx, test_idx in expanding_splits:
     preds_aug2 = (proba_aug2 >= threshold).astype(int)
     logit_preds_aug2.extend(preds_aug2)
 
-print("\n=== {}-fold Time Series CV (Logistic Regression) @ threshold = {:.2f} (mean ± std) ===".format(len(expanding_splits), threshold))
+print("\n======== {}-fold Time Series CV (Logistic Regression) @ threshold = {:.2f} (mean ± std) ========".format(len(expanding_splits), threshold))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(precs), np.std(precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(recs),  np.std(recs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(pr_aucs), np.std(pr_aucs)))
@@ -241,7 +241,7 @@ for train_idx, test_idx in expanding_splits:
     probit_preds_aug2_fold = (probit_proba_aug2 >= threshold).astype(int)
     probit_preds_aug2.extend(probit_preds_aug2_fold)
 
-print("\n=== {}-fold Time Series CV (Probit) @ threshold = {:.2f} (mean ± std) ===".format(len(expanding_splits), threshold))
+print("\n======== {}-fold Time Series CV (Probit) @ threshold = {:.2f} (mean ± std) ========".format(len(expanding_splits), threshold))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(probit_precs), np.std(probit_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(probit_recs),  np.std(probit_recs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(probit_pr_aucs), np.std(probit_pr_aucs)))
@@ -322,7 +322,7 @@ for train_idx, test_idx in expanding_splits:
     gb_preds_aug2_fold = (gb_proba_aug2 >= threshold).astype(int)
     gb_preds_aug2.extend(gb_preds_aug2_fold)
 
-print("\n=== {}-fold Time Series CV (Gradient Boosting) @ threshold = {:.2f} (mean ± std) ===".format(len(expanding_splits), threshold))
+print("\n======== {}-fold Time Series CV (Gradient Boosting) @ threshold = {:.2f} (mean ± std) ========".format(len(expanding_splits), threshold))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(gb_precs), np.std(gb_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(gb_recs),  np.std(gb_recs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(gb_pr_aucs), np.std(gb_pr_aucs)))
@@ -404,7 +404,7 @@ for train_idx, test_idx in expanding_splits:
     rf_preds_aug2_fold = (rf_proba_aug2 >= threshold).astype(int)
     rf_preds_aug2.extend(rf_preds_aug2_fold)
 
-print("\n=== {}-fold Time Series CV (Random Forest) @ threshold = {:.2f} (mean ± std) ===".format(len(expanding_splits), threshold))
+print("\n======== {}-fold Time Series CV (Random Forest) @ threshold = {:.2f} (mean ± std) ========".format(len(expanding_splits), threshold))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(rf_precs), np.std(rf_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(rf_recs),  np.std(rf_recs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(rf_pr_aucs), np.std(rf_pr_aucs)))
@@ -479,6 +479,7 @@ all_precisions_inv = precs_inv + probit_precs_inv + gb_precs_inv + rf_precs_inv
 model_avg_precision = np.mean(all_precisions)
 model_avg_precision_inv = np.mean(all_precisions_inv)
 
+print("\n======== SPF Comparison ========")
 print(f"\nPrecision Comparison:")
 print(f"SPF: {spf_precision:.3f}")
 print(f"Models (avg): {model_avg_precision:.3f}")
@@ -494,7 +495,7 @@ print("Precision improvement significance (models > SPF): p =", p_value)
 
 ## ================================================== Per Fold Performance ================================================== ##
 
-print("\n=== Per-fold Precision & Recall (by model) ===")
+print("\n======== Per-fold Precision & Recall (by model) ========")
 
 def _print_per_fold(name, precs_list, recs_list):
     if len(precs_list) == 0 and len(recs_list) == 0:
