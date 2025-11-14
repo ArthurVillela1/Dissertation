@@ -10,13 +10,15 @@ from sklearn.metrics import (
     f1_score, precision_score, recall_score, roc_auc_score,
     average_precision_score
 )
+from scipy.stats import ttest_1samp
 
 #### ============================ Importing Data ============================ ####
 df = pd.read_excel("Data.xlsx")
+print(df)
 
 data1 = df[['R_12-18M', 'T10Y2Y', 'T10Y3M', 'BaaSpread', 'PERatioS&P']].dropna()
 y = data1['R_12-18M']
-X = data1[['T10Y2Y', 'BaaSpread']]
+X = data1[['T10Y2Y']]
 
 # Columns used for training
 feature_cols = X.columns.tolist()
@@ -302,10 +304,10 @@ print(vif_data[vif_data["feature"] != "const"])
 # SPF precision
 df_spf = pd.read_excel("Data.xlsx")
 spf_data = df_spf[['R_12-18M', 'SPF']].dropna()
+spf_precision = precision_score(spf_data['R_12-18M'], spf_data['SPF'], zero_division=0)
 #print(spf_data)
 #print(f"SPF data shape: {spf_data.shape}")
 #print(f"SPF unique values: {spf_data['SPF'].unique()}")
-spf_precision = precision_score(spf_data['R_12-18M'], spf_data['SPF'], zero_division=0)
 
 # Models' average precision 
 all_precisions = precs + probit_precs + gb_precs + rf_precs
@@ -323,6 +325,8 @@ print(f"SPF: {spf_precision:.3f}")
 print(f"Models (avg): {model_avg_precision_inv:.3f}")
 print(f"Difference: {model_avg_precision_inv - spf_precision:+.3f}")
 
+t_stat, p_value = ttest_1samp(all_precisions, spf_precision, alternative='greater')
+print("Precision improvement significance (models > SPF): p =", p_value)
 
 #### ============================ Per-fold Precision & Recall ============================ ####
 print("\n=== Per-fold Precision & Recall (by model) ===")
