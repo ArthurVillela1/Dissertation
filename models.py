@@ -2,15 +2,14 @@ import pandas as pd
 import statsmodels.api as sm
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_auc_score, f1_score, precision_score, recall_score
-import numpy as np
-from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
     f1_score, precision_score, recall_score, roc_auc_score,
-    average_precision_score
+    average_precision_score, precision_recall_curve
 )
+import numpy as np
+from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from scipy.stats import ttest_1samp
+import matplotlib.pyplot as plt
 
 #### ============================ Importing Data ============================ ####
 df = pd.read_excel("Data.xlsx")
@@ -18,13 +17,13 @@ print(df)
 
 data1 = df[['R_12-18M', 'T10Y2Y', 'T10Y3M', 'BaaSpread', 'PERatioS&P']].dropna()
 y = data1['R_12-18M']
-X = data1[['T10Y2Y']]
+X = data1[['T10Y2Y']].copy()  # <- copy() avoids SettingWithCopyWarning
 
 # Columns used for training
 feature_cols = X.columns.tolist()
 
 # Inversion flag (1 if inverted) based on the first column of X (the slope measure)
-X["Inverted"] = (X.iloc[:, 0] < 0).astype(int) # Create a new column "Inverted" in X that is 1 when the first feature (T10Y2Y) is negative (inverted yield curve) and 0 otherwise
+X["Inverted"] = (X.iloc[:, 0] < 0).astype(int)
 
 # Threshold to convert predicted probabilities into binary predictions.
 threshold = 0.5 
@@ -38,15 +37,15 @@ def expanding_window_split(X, n_splits=5):
     blocks = np.array_split(np.arange(n_samples), n_splits + 2)
 
     for i in range(n_splits):
-        train_blocks = blocks[: i + 2] # Training with the first (i+2) blocks. blocks[: i + 2] is a slice of the list 'blocks' -> block[:2] = [B0, B1]
+        train_blocks = blocks[: i + 2]  # Training with the first (i+2) blocks
         if len(train_blocks) == 0:
             continue
-        train_idx = np.concatenate(train_blocks) # Transform two separate blocks into one
+        train_idx = np.concatenate(train_blocks)
 
-        test_idx = blocks[i + 2] # Testing with the block after the training blocks. blocks[i + 2] is an index access into 'block' -> blocks[0+2] = B2
+        test_idx = blocks[i + 2]  # Testing with the block after the training blocks
 
-        if len(test_idx) > 0: # Checking for two classes in testing set
-            splits.append((train_idx, test_idx)) # Append the train and test indices as a tuple to the splits list
+        if len(test_idx) > 0:
+            splits.append((train_idx, test_idx))
 
     return splits
 
@@ -83,25 +82,34 @@ display_fold_info(X, expanding_splits)
 
 #### ============================  Time Series Cross-Validation for Model Evaluation ============================ ####
 
-# Logit
-clf = LogisticRegression(solver="liblinear", random_state=42) #  optimization algorithm that finds the best coefficients (β values) for the logistic regression by iteratively adjusting one parameter at a time until it minimizes the prediction error on your recession data.
-# Its outputs are probabilities which are then transformed into 1 or 0 based on the treshold
+# helper lists for PR curves (per fold, per model)
+all_y_logit, all_proba_logit = [], []
+all_y_probit, all_proba_probit = [], []
+all_y_gb, all_proba_gb = [], []
+all_y_rf, all_proba_rf = [], []
+
+# -------------------- Logistic Regression -------------------- #
+clf = LogisticRegression(solver="liblinear", random_state=42)
 
 f1s, precs, recs, aucs, pr_aucs = [], [], [], [], []
 f1s_inv, precs_inv, recs_inv, aucs_inv, pr_aucs_inv = [], [], [], [], []
 
 for train_idx, test_idx in expanding_splits:
-    X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx] # Selecting training and testing data rows for the explanatory variables based on indices set on expanding_splits function
-    y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx] # Selecting training and testing data rows for the dependent variable based on indices set on expanding_splits function
+    X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
+    y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
 
-    if len(np.unique(y_te)) < 2: #  # Skip folds that can't be properly evaluated (e.g., only one class) because certain machine learning metrics become mathematically undefined or meaningless when only one class is present in the test set
+    if len(np.unique(y_te)) < 2:
         continue
         
-    clf.fit(X_tr[feature_cols], y_tr) # Trains (fits) the logistic regression model on the training data for the current fold
-    proba = clf.predict_proba(X_te[feature_cols])[:, 1] # Calculating probabilities of recession for the test set
-    preds = (proba >= threshold).astype(int) # Converting probabilities into binary predictions based on the defined threshold
+    clf.fit(X_tr[feature_cols], y_tr)
+    proba = clf.predict_proba(X_te[feature_cols])[:, 1]
+    preds = (proba >= threshold).astype(int)
 
-    f1s.append(f1_score(y_te, preds, zero_division=0)) # 'zero_division=0' -> Instead of crashing with a math error (dividing by zero), it returns 0
+    # store per-fold test data for PR curves
+    all_y_logit.append(y_te.values)
+    all_proba_logit.append(proba)
+
+    f1s.append(f1_score(y_te, preds, zero_division=0))
     precs.append(precision_score(y_te, preds, zero_division=0))
     recs.append(recall_score(y_te, preds, zero_division=0))
     aucs.append(roc_auc_score(y_te, proba))      
@@ -109,7 +117,7 @@ for train_idx, test_idx in expanding_splits:
 
     # When curve inverted
     inv_mask = X_te["Inverted"] == 1
-    if inv_mask.sum() > 0 and len(np.unique(y_te[inv_mask])) == 2: # Check if there are at least one inverted periods on the inv_mask and if both classes are present on the testing data for the dependent variable        
+    if inv_mask.sum() > 0 and len(np.unique(y_te[inv_mask])) == 2:
         f1s_inv.append(f1_score(y_te[inv_mask], preds[inv_mask], zero_division=0))
         precs_inv.append(precision_score(y_te[inv_mask], preds[inv_mask], zero_division=0))
         recs_inv.append(recall_score(y_te[inv_mask], preds[inv_mask], zero_division=0))
@@ -126,7 +134,7 @@ print("Precision: {:.3f} ± {:.3f}".format(np.mean(precs_inv), np.std(precs_inv)
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(recs_inv),  np.std(recs_inv)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(pr_aucs_inv), np.std(pr_aucs_inv)))
 
-# Probit Classifier (using statsmodels for consistency with statistical analysis)
+# -------------------- Probit Classifier -------------------- #
 probit_f1s, probit_precs, probit_recs, probit_aucs, probit_pr_aucs = [], [], [], [], []
 probit_f1s_inv, probit_precs_inv, probit_recs_inv, probit_aucs_inv, probit_pr_aucs_inv = [], [], [], [], []
 
@@ -137,7 +145,6 @@ for train_idx, test_idx in expanding_splits:
     if len(np.unique(y_te)) < 2:
         continue
         
-    # Addding constant because sklearn automatically includes an intercept while statsmodels doesn't
     X_tr_const = sm.add_constant(X_tr[feature_cols], has_constant='add')
     X_te_const = sm.add_constant(X_te[feature_cols], has_constant='add')
     
@@ -146,6 +153,10 @@ for train_idx, test_idx in expanding_splits:
     
     probit_proba = probit_result.predict(X_te_const)
     probit_preds = (probit_proba >= threshold).astype(int)
+
+    # store per-fold test data for PR curves
+    all_y_probit.append(y_te.values)
+    all_proba_probit.append(probit_proba)
 
     probit_f1s.append(f1_score(y_te, probit_preds, zero_division=0))
     probit_precs.append(precision_score(y_te, probit_preds, zero_division=0))
@@ -171,15 +182,15 @@ print("Precision: {:.3f} ± {:.3f}".format(np.mean(probit_precs_inv), np.std(pro
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(probit_recs_inv),  np.std(probit_recs_inv)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(probit_pr_aucs_inv), np.std(probit_pr_aucs_inv)))
 
-# Gradient Boosting Classifier
+# -------------------- Gradient Boosting Classifier -------------------- #
 gb_f1s, gb_precs, gb_recs, gb_aucs, gb_pr_aucs = [], [], [], [], []
 gb_f1s_inv, gb_precs_inv, gb_recs_inv, gb_aucs_inv, gb_pr_aucs_inv = [], [], [], [], []
 
 gb_clf = GradientBoostingClassifier(
-    random_state=42, # Seed value that makes your machine learning results reproducible by controlling randomness (e.g., same initialization, convergence path, etc.))
-    n_estimators=300, # Number of boosting stages (trees) to be built     
-    learning_rate=0.05, # Controls how much each tree contributes to the final prediction
-    max_depth=2 # How deep each individual tree can grow. Max_depth=2: Each tree can only make 2 levels of decisions (splits)
+    random_state=42,
+    n_estimators=300,
+    learning_rate=0.05,
+    max_depth=2
 )
 
 for train_idx, test_idx in expanding_splits:
@@ -192,6 +203,10 @@ for train_idx, test_idx in expanding_splits:
     gb_clf.fit(X_tr[feature_cols], y_tr)
     gb_proba = gb_clf.predict_proba(X_te[feature_cols])[:, 1]
     gb_preds = (gb_proba >= threshold).astype(int)
+
+    # store per-fold test data for PR curves
+    all_y_gb.append(y_te.values)
+    all_proba_gb.append(gb_proba)
 
     gb_f1s.append(f1_score(y_te, gb_preds, zero_division=0))
     gb_precs.append(precision_score(y_te, gb_preds, zero_division=0))
@@ -217,16 +232,16 @@ print("Precision: {:.3f} ± {:.3f}".format(np.mean(gb_precs_inv), np.std(gb_prec
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(gb_recs_inv),  np.std(gb_recs_inv)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(gb_pr_aucs_inv), np.std(gb_pr_aucs_inv)))
 
-# Random Forest Classifier
+# -------------------- Random Forest Classifier -------------------- #
 rf_f1s, rf_precs, rf_recs, rf_aucs, rf_pr_aucs = [], [], [], [], []
 rf_f1s_inv, rf_precs_inv, rf_recs_inv, rf_aucs_inv, rf_pr_aucs_inv = [], [], [], [], []
 
 rf_clf = RandomForestClassifier(
     n_estimators=500,
     max_depth=None,
-    min_samples_leaf=1, # Minimum number of samples required at each leaf node
+    min_samples_leaf=1,
     random_state=42,
-    n_jobs=-1 # Number of CPU cores to use for parallel processing. n_jobs=-1: Use ALL available CPU cores (fastest)
+    n_jobs=-1
 )
 
 for train_idx, test_idx in expanding_splits:
@@ -239,6 +254,10 @@ for train_idx, test_idx in expanding_splits:
     rf_clf.fit(X_tr[feature_cols], y_tr)
     rf_proba = rf_clf.predict_proba(X_te[feature_cols])[:, 1]
     rf_preds = (rf_proba >= threshold).astype(int)
+
+    # store per-fold test data for PR curves
+    all_y_rf.append(y_te.values)
+    all_proba_rf.append(rf_proba)
 
     rf_f1s.append(f1_score(y_te, rf_preds, zero_division=0))
     rf_precs.append(precision_score(y_te, rf_preds, zero_division=0))
@@ -264,6 +283,37 @@ print("Precision: {:.3f} ± {:.3f}".format(np.mean(rf_precs_inv), np.std(rf_prec
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(rf_recs_inv),  np.std(rf_recs_inv)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(rf_pr_aucs_inv), np.std(rf_pr_aucs_inv))) 
 
+## ============================ PR–AUC CURVES: 4 FIGURES, 3 FOLDS EACH ============================ ##
+
+def plot_per_model_pr_curves(all_y, all_proba, model_name, filename_prefix):
+    """
+    Plot one figure for a given model, with one PR curve per fold.
+    """
+    if len(all_y) == 0:
+        return
+    
+    plt.figure(figsize=(7, 6))
+    
+    for fold_idx, (y_fold, proba_fold) in enumerate(zip(all_y, all_proba), start=1):
+        prec_curve, rec_curve, _ = precision_recall_curve(y_fold, proba_fold)
+        ap = average_precision_score(y_fold, proba_fold)
+        plt.plot(rec_curve, prec_curve, label=f"Fold {fold_idx} (PR AUC = {ap:.3f})")
+    
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.title(f"Precision–Recall Curves – {model_name}")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(f"{filename_prefix}_pr_curves.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+# one PNG per econometric framework
+plot_per_model_pr_curves(all_y_logit,  all_proba_logit,  "Logistic Regression", "logit")
+plot_per_model_pr_curves(all_y_probit, all_proba_probit, "Probit",              "probit")
+plot_per_model_pr_curves(all_y_gb,     all_proba_gb,     "Gradient Boosting",   "gb")
+plot_per_model_pr_curves(all_y_rf,     all_proba_rf,     "Random Forest",       "rf")
+
 ## ============================ Computing coefficients, marginal effects, and VIFs ============================ ##
 
 print("\n=== Statistical Analysis ===")
@@ -277,18 +327,18 @@ print("\nLogistic Regression (Logit) Coefficients:")
 print(logit_results.summary2().tables[1][['Coef.', 'Std.Err.', 'z', 'P>|z|']])
 
 # Probit
-probit_model = sm.Probit(y, X_with_const)
-probit_results = probit_model.fit(disp=0)
+probit_model_full = sm.Probit(y, X_with_const)
+probit_results_full = probit_model_full.fit(disp=0)
 
 print("\nProbit Regression Coefficients:")
-print(probit_results.summary2().tables[1][['Coef.', 'Std.Err.', 'z', 'P>|z|']])
+print(probit_results_full.summary2().tables[1][['Coef.', 'Std.Err.', 'z', 'P>|z|']])
 
 # Marginal Effects
-probit_margeff = probit_results.get_margeff(at='overall')
+probit_margeff = probit_results_full.get_margeff(at='overall')
 print("\nProbit Average Marginal Effects (AME):")
 print(probit_margeff.summary())
 
-# Testing for Multicolinearity (VIF)
+# Testing for Multicollinearity (VIF)
 vif_data = pd.DataFrame()
 vif_data["feature"] = X_with_const.columns
 vif_data["VIF"] = [
@@ -305,9 +355,6 @@ print(vif_data[vif_data["feature"] != "const"])
 df_spf = pd.read_excel("Data.xlsx")
 spf_data = df_spf[['R_12-18M', 'SPF']].dropna()
 spf_precision = precision_score(spf_data['R_12-18M'], spf_data['SPF'], zero_division=0)
-#print(spf_data)
-#print(f"SPF data shape: {spf_data.shape}")
-#print(f"SPF unique values: {spf_data['SPF'].unique()}")
 
 # Models' average precision 
 all_precisions = precs + probit_precs + gb_precs + rf_precs
@@ -335,7 +382,6 @@ def _print_per_fold(name, precs_list, recs_list):
     if len(precs_list) == 0 and len(recs_list) == 0:
         print(f"\n{name}: No valid folds (no recorded precision/recall).")
         return
-    # Use the length of the precision list (they should match recalls per model)
     n = max(len(precs_list), len(recs_list))
     print(f"\n{name} (n_valid_folds = {n}):")
     for i in range(n):
@@ -346,9 +392,7 @@ def _print_per_fold(name, precs_list, recs_list):
         else:
             print(f"  Fold {i+1}: Precision = {p:.3f}, Recall = {r:.3f}")
 
-# Print per-fold precision & recall for each model
 _print_per_fold('Logistic Regression', precs, recs)
 _print_per_fold('Probit', probit_precs, probit_recs)
 _print_per_fold('Gradient Boosting', gb_precs, gb_recs)
 _print_per_fold('Random Forest', rf_precs, rf_recs)
-
