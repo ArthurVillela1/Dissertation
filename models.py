@@ -19,11 +19,14 @@ print(df)
 
 data1 = df[['R_12-18M', 'T10Y2Y', 'T10Y3M', 'BaaSpread', 'PERatioS&P']].dropna()
 y = data1['R_12-18M']
-X = data1[['T10Y3M', 'PERatioS&P', 'BaaSpread']].copy()
+X = data1[['T10Y2Y']].copy()
+
+# SPF is quarterly (0/1) with NaNs in monthly data; align to the same index as data1
+spf = df.loc[data1.index, 'SPF']
 
 feature_cols = X.columns.tolist()
 X["Inverted"] = (X.iloc[:, 0] < 0).astype(int)
-threshold = 0.5
+threshold = 0.2
 
 ## ================================================== Cross Validation Functions ================================================== ##
 
@@ -95,6 +98,9 @@ clf = LogisticRegression(solver="liblinear", random_state=42)
 f1s, precs, recs, aucs, pr_aucs = [], [], [], [], []
 f1s_inv, precs_inv, recs_inv, aucs_inv, pr_aucs_inv = [], [], [], [], []
 
+# SPF per-fold precision (overall and when inverted), using only months where SPF is observed
+spf_precs, spf_precs_inv = [], []
+
 logit_y_all = []
 logit_preds_slope2 = []
 logit_preds_aug2 = []
@@ -125,6 +131,27 @@ for train_idx, test_idx in expanding_splits:
     pr_aucs.append(average_precision_score(y_te, proba))
 
     inv_mask = X_te["Inverted"] == 1
+
+    # ===== SPF on the same test fold (quarterly, with NaNs) =====
+    # Use only months where SPF is observed, both overall and when inverted.
+    spf_fold = spf.iloc[test_idx]              # 0/1 or NaN for this fold
+    mask_spf = spf_fold.notna()                # only months with SPF forecast
+
+    if mask_spf.sum() > 0:
+        y_spf = y_te[mask_spf]
+        spf_preds = spf_fold[mask_spf].astype(int)
+        spf_precs.append(precision_score(y_spf, spf_preds, zero_division=0))
+
+        inv_spf_mask = mask_spf & inv_mask
+        if inv_spf_mask.sum() > 0 and len(np.unique(y_te[inv_spf_mask])) == 2:
+            spf_precs_inv.append(
+                precision_score(y_te[inv_spf_mask],
+                                spf_fold[inv_spf_mask].astype(int),
+                                zero_division=0)
+            )
+
+    # ============================================================
+
     if inv_mask.sum() > 0 and len(np.unique(y_te[inv_mask])) == 2:
         f1s_inv.append(f1_score(y_te[inv_mask], preds[inv_mask], zero_division=0))
         precs_inv.append(precision_score(y_te[inv_mask], preds[inv_mask], zero_division=0))
@@ -425,14 +452,14 @@ def plot_per_model_pr_curves(all_y, all_proba, model_name, filename_prefix):
         prec_curve, rec_curve, _ = precision_recall_curve(y_fold, proba_fold)
         ap = average_precision_score(y_fold, proba_fold)
         plt.plot(rec_curve, prec_curve, label=f"Fold {fold_idx} (PR AUC = {ap:.3f})")
-    plt.xlabel("Recall")
-    plt.ylabel("Precision")
-    plt.title(f"Precision–Recall Curves – {model_name}")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(f"{filename_prefix}_pr_curves.png", dpi=300, bbox_inches="tight")
-    plt.close()
+        plt.xlabel("Recall")
+        plt.ylabel("Precision")
+        plt.title(f"Precision–Recall Curves – {model_name}")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(f"{filename_prefix}_pr_curves.png", dpi=300, bbox_inches="tight")
+        plt.close()
 
 plot_per_model_pr_curves(all_y_logit,  all_proba_logit,  "Logistic Regression", "logit")
 plot_per_model_pr_curves(all_y_probit, all_proba_probit, "Probit",              "probit")
@@ -470,28 +497,32 @@ plot_per_model_pr_curves(all_y_rf,     all_proba_rf,     "Random Forest",       
 
 ## ================================================== SPF Comparison ================================================== ##
 
-df_spf = pd.read_excel("Data.xlsx")
-spf_data = df_spf[['R_12-18M', 'SPF']].dropna()
-spf_precision = precision_score(spf_data['R_12-18M'], spf_data['SPF'], zero_division=0)
+spf_precs_arr = np.array(spf_precs)
 
-all_precisions = precs + probit_precs + gb_precs + rf_precs
-all_precisions_inv = precs_inv + probit_precs_inv + gb_precs_inv + rf_precs_inv
-model_avg_precision = np.mean(all_precisions)
-model_avg_precision_inv = np.mean(all_precisions_inv)
+logit_prec_mean   = float(np.mean(precs))
+logit_rec_mean    = float(np.mean(recs))
+probit_prec_mean  = float(np.mean(probit_precs))
+probit_rec_mean   = float(np.mean(probit_recs))
+gb_prec_mean      = float(np.mean(gb_precs))
+gb_rec_mean       = float(np.mean(gb_recs))
+rf_prec_mean      = float(np.mean(rf_precs))
+rf_rec_mean       = float(np.mean(rf_recs))
+spf_prec_mean     = float(np.mean(spf_precs_arr))
 
-print("\n======== SPF Comparison ========")
-print(f"\nPrecision Comparison:")
-print(f"SPF: {spf_precision:.3f}")
-print(f"Models (avg): {model_avg_precision:.3f}")
-print(f"Difference: {model_avg_precision - spf_precision:+.3f}")
+print("\n======== Average per-fold Precision & Recall (by model) ========")
+print(f"SPF (precision only): {spf_prec_mean:.3f}\n")
 
-print(f"\nPrecision Comparison (Inverted Yield Curve):")
-print(f"SPF: {spf_precision:.3f}")
-print(f"Models (avg): {model_avg_precision_inv:.3f}")
-print(f"Difference: {model_avg_precision_inv - spf_precision:+.3f}")
+print("Logistic Regression:  Precision = {:.3f}, Recall = {:.3f}".format(logit_prec_mean,  logit_rec_mean))
+print("Probit:               Precision = {:.3f}, Recall = {:.3f}".format(probit_prec_mean, probit_rec_mean))
+print("Gradient Boosting:    Precision = {:.3f}, Recall = {:.3f}".format(gb_prec_mean,     gb_rec_mean))
+print("Random Forest:        Precision = {:.3f}, Recall = {:.3f}".format(rf_prec_mean,     rf_rec_mean))
 
-t_stat, p_value = ttest_1samp(all_precisions, spf_precision, alternative='greater')
-print("Precision improvement significance (models > SPF): p =", p_value)
+print("\n======== SPF vs Models – Precision (average over folds) ========")
+print("SPF precision (avg per fold): {:.3f}".format(spf_prec_mean))
+print("Logit  precision − SPF: {:+.3f}".format(logit_prec_mean  - spf_prec_mean))
+print("Probit precision − SPF: {:+.3f}".format(probit_prec_mean - spf_prec_mean))
+print("GB     precision − SPF: {:+.3f}".format(gb_prec_mean     - spf_prec_mean))
+print("RF     precision − SPF: {:+.3f}".format(rf_prec_mean     - spf_prec_mean))
 
 ## ================================================== Per Fold Performance ================================================== ##
 
