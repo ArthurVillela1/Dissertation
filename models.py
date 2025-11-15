@@ -19,11 +19,14 @@ print(df)
 
 data1 = df[['R_12-18M', 'T10Y2Y', 'T10Y3M', 'BaaSpread', 'PERatioS&P']].dropna()
 y = data1['R_12-18M']
-X = data1[['T10Y3M']].copy()
+X = data1[['T10Y3M']].copy()   # main slope spec here
 
 feature_cols = X.columns.tolist()
 X["Inverted"] = (X.iloc[:, 0] < 0).astype(int)
 threshold = 0.5
+
+n_samples = len(X)
+dates = pd.date_range(start='1980-11-01', periods=n_samples, freq='MS')
 
 ## ================================================== Cross Validation Functions ================================================== ##
 
@@ -48,14 +51,14 @@ def display_fold_info(X, splits):
     print(f"Cross-validation Fold Structure")
     print(f"Total data points: {len(X)}")
     if hasattr(X, 'index') and hasattr(X.index, 'strftime'):
-        dates = X.index
+        dates_local = X.index
     else:
-        dates = pd.date_range(start='1980-11-01', periods=len(X), freq='MS')
+        dates_local = pd.date_range(start='1980-11-01', periods=len(X), freq='MS')
     for i, (train_idx, test_idx) in enumerate(splits, 1):
-        train_start = dates[0]
-        train_end = dates[train_idx[-1]]
-        test_start = dates[test_idx[0]]
-        test_end = dates[test_idx[-1]]
+        train_start = dates_local[0]
+        train_end = dates_local[train_idx[-1]]
+        test_start = dates_local[test_idx[0]]
+        test_end = dates_local[test_idx[-1]]
         print(f"\nFOLD {i}:")
         print(f"  Training:  {train_start.strftime('%Y-%m')} to {train_end.strftime('%Y-%m')} ({len(train_idx):3d} months)")
         print(f"  Testing:   {test_start.strftime('%Y-%m')} to {test_end.strftime('%Y-%m')} ({len(test_idx):3d} months)")
@@ -83,12 +86,30 @@ def run_mcnemar(name, preds_A, preds_B, y_true):
     print(f"\nMcNemar test ({name}):")
     print(f"b = {b}, c = {c}, p-value = {result.pvalue:.4f}")
 
+## ================================================== GLOBAL STORAGE FOR PER-OBSERVATION PREDICTIONS ================================================== ##
+
+# fold identity for each observation (NaN for training-only)
+fold_id_global = np.full(n_samples, np.nan)
+
+# For each model, store predictions / probabilities for every observation
+logit_pred_global  = np.full(n_samples, np.nan)
+logit_proba_global = np.full(n_samples, np.nan)
+
+probit_pred_global  = np.full(n_samples, np.nan)
+probit_proba_global = np.full(n_samples, np.nan)
+
+gb_pred_global  = np.full(n_samples, np.nan)
+gb_proba_global = np.full(n_samples, np.nan)
+
+rf_pred_global  = np.full(n_samples, np.nan)
+rf_proba_global = np.full(n_samples, np.nan)
+
 all_y_logit, all_proba_logit = [], []
 all_y_probit, all_proba_probit = [], []
 all_y_gb, all_proba_gb = [], []
 all_y_rf, all_proba_rf = [], []
 
-## ================================================== Main Results ================================================== ##
+## ================================================== Main Results: LOGIT ================================================== ##
 
 clf = LogisticRegression(solver="liblinear", random_state=42)
 
@@ -101,7 +122,7 @@ logit_preds_aug2 = []
 logit_preds_slope3 = []
 logit_preds_aug3 = []
 
-for train_idx, test_idx in expanding_splits:
+for fold_id, (train_idx, test_idx) in enumerate(expanding_splits, start=1):
     X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
     y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
 
@@ -109,11 +130,17 @@ for train_idx, test_idx in expanding_splits:
         continue
 
     logit_y_all.extend(y_te.values)
+    fold_id_global[test_idx] = fold_id
 
+    # main spec: T10Y3M
     clf.fit(X_tr[feature_cols], y_tr)
     proba = clf.predict_proba(X_te[feature_cols])[:, 1]
     preds = (proba >= threshold).astype(int)
     logit_preds_aug3.extend(preds)
+
+    # store per-observation predictions globally
+    logit_pred_global[test_idx]  = preds
+    logit_proba_global[test_idx] = proba
 
     all_y_logit.append(y_te.values)
     all_proba_logit.append(proba)
@@ -132,6 +159,7 @@ for train_idx, test_idx in expanding_splits:
         aucs_inv.append(roc_auc_score(y_te[inv_mask], proba[inv_mask]))
         pr_aucs_inv.append(average_precision_score(y_te[inv_mask], proba[inv_mask]))
 
+    # extra specs for McNemar (no need to store per-obs here)
     X_tr_slope3 = data1.iloc[train_idx][['T10Y3M']]
     X_te_slope3 = data1.iloc[test_idx][['T10Y3M']]
     clf.fit(X_tr_slope3, y_tr)
@@ -166,6 +194,8 @@ print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(pr_aucs_inv), np.std(pr_aucs_
 run_mcnemar("Logit T10Y2Y slope vs augmented", logit_preds_slope2, logit_preds_aug2, logit_y_all)
 run_mcnemar("Logit T10Y3M slope vs augmented", logit_preds_slope3, logit_preds_aug3, logit_y_all)
 
+## ================================================== PROBIT ================================================== ##
+
 probit_f1s, probit_precs, probit_recs, probit_aucs, probit_pr_aucs = [], [], [], [], []
 probit_f1s_inv, probit_precs_inv, probit_recs_inv, probit_aucs_inv, probit_pr_aucs_inv = [], [], [], [], []
 
@@ -193,6 +223,10 @@ for train_idx, test_idx in expanding_splits:
     probit_proba = probit_result.predict(X_te_const)
     probit_preds = (probit_proba >= threshold).astype(int)
     probit_preds_aug3.extend(probit_preds)
+
+    # store per-observation predictions
+    probit_pred_global[test_idx]  = probit_preds
+    probit_proba_global[test_idx] = probit_proba
 
     all_y_probit.append(y_te.values)
     all_proba_probit.append(probit_proba)
@@ -254,6 +288,8 @@ print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(probit_pr_aucs_inv), np.std(p
 run_mcnemar("Probit T10Y2Y slope vs augmented", probit_preds_slope2, probit_preds_aug2, probit_y_all)
 run_mcnemar("Probit T10Y3M slope vs augmented", probit_preds_slope3, probit_preds_aug3, probit_y_all)
 
+## ================================================== GRADIENT BOOSTING ================================================== ##
+
 gb_f1s, gb_precs, gb_recs, gb_aucs, gb_pr_aucs = [], [], [], [], []
 gb_f1s_inv, gb_precs_inv, gb_recs_inv, gb_aucs_inv, gb_pr_aucs_inv = [], [], [], [], []
 
@@ -283,6 +319,9 @@ for train_idx, test_idx in expanding_splits:
     gb_proba = gb_clf.predict_proba(X_te[feature_cols])[:, 1]
     gb_preds = (gb_proba >= threshold).astype(int)
     gb_preds_aug3.extend(gb_preds)
+
+    gb_pred_global[test_idx]  = gb_preds
+    gb_proba_global[test_idx] = gb_proba
 
     all_y_gb.append(y_te.values)
     all_proba_gb.append(gb_proba)
@@ -335,6 +374,8 @@ print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(gb_pr_aucs_inv), np.std(gb_pr
 run_mcnemar("Gradient Boosting T10Y2Y slope vs augmented", gb_preds_slope2, gb_preds_aug2, gb_y_all)
 run_mcnemar("Gradient Boosting T10Y3M slope vs augmented", gb_preds_slope3, gb_preds_aug3, gb_y_all)
 
+## ================================================== RANDOM FOREST ================================================== ##
+
 rf_f1s, rf_precs, rf_recs, rf_aucs, rf_pr_aucs = [], [], [], [], []
 rf_f1s_inv, rf_precs_inv, rf_recs_inv, rf_aucs_inv, rf_pr_aucs_inv = [], [], [], [], []
 
@@ -365,6 +406,9 @@ for train_idx, test_idx in expanding_splits:
     rf_proba = rf_clf.predict_proba(X_te[feature_cols])[:, 1]
     rf_preds = (rf_proba >= threshold).astype(int)
     rf_preds_aug3.extend(rf_preds)
+
+    rf_pred_global[test_idx]  = rf_preds
+    rf_proba_global[test_idx] = rf_proba
 
     all_y_rf.append(y_te.values)
     all_proba_rf.append(rf_proba)
@@ -417,56 +461,37 @@ print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(rf_pr_aucs_inv), np.std(rf_pr
 run_mcnemar("Random Forest T10Y2Y slope vs augmented", rf_preds_slope2, rf_preds_aug2, rf_y_all)
 run_mcnemar("Random Forest T10Y3M slope vs augmented", rf_preds_slope3, rf_preds_aug3, rf_y_all)
 
-def plot_per_model_pr_curves(all_y, all_proba, model_name, filename_prefix):
+## ============================ PR–AUC Curves: mean over folds ============================ ##
+plt.figure(figsize=(7, 6))
+
+def plot_mean_pr_curve(all_y, all_proba, fold_pr_aucs, label, n_points=200):
     if len(all_y) == 0:
         return
-    plt.figure(figsize=(7, 6))
-    for fold_idx, (y_fold, proba_fold) in enumerate(zip(all_y, all_proba), start=1):
-        prec_curve, rec_curve, _ = precision_recall_curve(y_fold, proba_fold)
-        ap = average_precision_score(y_fold, proba_fold)
-        plt.plot(rec_curve, prec_curve, label=f"Fold {fold_idx} (PR AUC = {ap:.3f})")
-    plt.xlabel("Recall")
-    plt.ylabel("Precision")
-    plt.title(f"Precision–Recall Curves – {model_name}")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(f"{filename_prefix}_pr_curves.png", dpi=300, bbox_inches="tight")
-    plt.close()
+    recall_grid = np.linspace(0.0, 1.0, n_points)
+    precisions_interp = []
+    for y_fold, proba_fold in zip(all_y, all_proba):
+        prec, rec, _ = precision_recall_curve(y_fold, proba_fold)
+        rec_unique, idx = np.unique(rec, return_index=True)
+        prec_unique = prec[idx]
+        prec_on_grid = np.interp(recall_grid, rec_unique, prec_unique)
+        precisions_interp.append(prec_on_grid)
+    mean_precision = np.mean(precisions_interp, axis=0)
+    mean_ap = np.mean(fold_pr_aucs)
+    plt.plot(recall_grid, mean_precision, label=f"{label} (mean PR AUC = {mean_ap:.3f})")
 
-plot_per_model_pr_curves(all_y_logit,  all_proba_logit,  "Logistic Regression", "logit")
-plot_per_model_pr_curves(all_y_probit, all_proba_probit, "Probit",              "probit")
-plot_per_model_pr_curves(all_y_gb,     all_proba_gb,     "Gradient Boosting",   "gb")
-plot_per_model_pr_curves(all_y_rf,     all_proba_rf,     "Random Forest",       "rf")
+plot_mean_pr_curve(all_y_logit,  all_proba_logit,  pr_aucs,        "Logit")
+plot_mean_pr_curve(all_y_probit, all_proba_probit, probit_pr_aucs, "Probit")
+plot_mean_pr_curve(all_y_gb,     all_proba_gb,     gb_pr_aucs,     "Gradient Boosting")
+plot_mean_pr_curve(all_y_rf,     all_proba_rf,     rf_pr_aucs,     "Random Forest")
 
-#print("\n=== Statistical Analysis ===")
-#X_with_const = sm.add_constant(X[feature_cols], has_constant='add')
-
-#logit_model = sm.Logit(y, X_with_const)
-#logit_results = logit_model.fit(disp=0)
-
-#print("\nLogistic Regression (Logit) Coefficients:")
-#print(logit_results.summary2().tables[1][['Coef.', 'Std.Err.', 'z', 'P>|z|']])
-
-#probit_model_full = sm.Probit(y, X_with_const)
-#probit_results_full = probit_model_full.fit(disp=0)
-
-#print("\nProbit Regression Coefficients:")
-#print(probit_results_full.summary2().tables[1][['Coef.', 'Std.Err.', 'z', 'P>|z|']])
-
-#probit_margeff = probit_results_full.get_margeff(at='overall')
-#print("\nProbit Average Marginal Effects (AME):")
-#print(probit_margeff.summary())
-
-#vif_data = pd.DataFrame()
-#vif_data["feature"] = X_with_const.columns
-#vif_data["VIF"] = [
-#    variance_inflation_factor(X_with_const.values, i)
-#    for i in range(X_with_const.shape[1])
-#]
-
-#print("\n=== Variance Inflation Factors (VIF) ===")
-#print(vif_data[vif_data["feature"] != "const"])
+plt.xlabel("Recall")
+plt.ylabel("Precision")
+plt.title("Precision–Recall Curves (mean over expanding-window folds)")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.savefig("pr_curves_mean_over_folds.png", dpi=300, bbox_inches="tight")
+plt.close()
 
 ## ================================================== SPF Comparison ================================================== ##
 
@@ -480,17 +505,10 @@ model_avg_precision = np.mean(all_precisions)
 model_avg_precision_inv = np.mean(all_precisions_inv)
 
 print("\n======== Averages ========")
-#print(f"\nPrecision Comparison:")
-#print(f"SPF: {spf_precision:.3f}")
 print(f"Models (avg): {model_avg_precision:.3f}")
-#print(f"Difference: {model_avg_precision - spf_precision:+.3f}")
-
-#print(f"\nPrecision Comparison (Inverted Yield Curve):")
-#print(f"SPF: {spf_precision:.3f}")
 print(f"Models (avg) YC inverted: {model_avg_precision_inv:.3f}")
-#print(f"Difference: {model_avg_precision_inv - spf_precision:+.3f}")
 
-## ================================================== Per Fold Performance ================================================== ##
+## ================================================== Per Fold Performance (Precision & Recall) ================================================== ##
 
 print("\n======== Per-fold Precision & Recall (by model) ========")
 
@@ -512,3 +530,27 @@ _print_per_fold('Logistic Regression', precs, recs)
 _print_per_fold('Probit', probit_precs, probit_recs)
 _print_per_fold('Gradient Boosting', gb_precs, gb_recs)
 _print_per_fold('Random Forest', rf_precs, rf_recs)
+
+## ================================================== Build per-observation table for all models ================================================== ##
+
+mask_test = ~np.isnan(fold_id_global)   # True for test observations across all folds
+
+pred_df_all = pd.DataFrame({
+    "Fold": fold_id_global[mask_test].astype(int),
+    "Date": dates[mask_test].strftime("%Y-%m"),
+    "y_true": y.values[mask_test].astype(int),
+    "Logit_pred":  logit_pred_global[mask_test].astype(int),
+    "Logit_proba": logit_proba_global[mask_test],
+    "Probit_pred":  probit_pred_global[mask_test].astype(int),
+    "Probit_proba": probit_proba_global[mask_test],
+    "GB_pred":  gb_pred_global[mask_test].astype(int),
+    "GB_proba": gb_proba_global[mask_test],
+    "RF_pred":  rf_pred_global[mask_test].astype(int),
+    "RF_proba": rf_proba_global[mask_test],
+})
+
+print("\n=== All models: per-observation predictions in test folds ===")
+print(pred_df_all.head(20).to_string(index=False))
+print(f"\nTotal test observations in table: {len(pred_df_all)}")  # should be 312
+
+pred_df_all.to_excel("all_models_fold_predictions.xlsx", index=False)
