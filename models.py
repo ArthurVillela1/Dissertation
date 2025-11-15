@@ -19,7 +19,7 @@ print(df)
 
 data1 = df[['R_12-18M', 'T10Y2Y', 'T10Y3M', 'BaaSpread', 'PERatioS&P']].dropna()
 y = data1['R_12-18M']
-X = data1[['T10Y2Y']].copy()
+X = data1[['T10Y3M']].copy()
 
 feature_cols = X.columns.tolist()
 X["Inverted"] = (X.iloc[:, 0] < 0).astype(int)
@@ -479,16 +479,16 @@ all_precisions_inv = precs_inv + probit_precs_inv + gb_precs_inv + rf_precs_inv
 model_avg_precision = np.mean(all_precisions)
 model_avg_precision_inv = np.mean(all_precisions_inv)
 
-print("\n======== SPF Comparison ========")
-print(f"\nPrecision Comparison:")
-print(f"SPF: {spf_precision:.3f}")
+print("\n======== Averages ========")
+#print(f"\nPrecision Comparison:")
+#print(f"SPF: {spf_precision:.3f}")
 print(f"Models (avg): {model_avg_precision:.3f}")
-print(f"Difference: {model_avg_precision - spf_precision:+.3f}")
+#print(f"Difference: {model_avg_precision - spf_precision:+.3f}")
 
-print(f"\nPrecision Comparison (Inverted Yield Curve):")
-print(f"SPF: {spf_precision:.3f}")
-print(f"Models (avg): {model_avg_precision_inv:.3f}")
-print(f"Difference: {model_avg_precision_inv - spf_precision:+.3f}")
+#print(f"\nPrecision Comparison (Inverted Yield Curve):")
+#print(f"SPF: {spf_precision:.3f}")
+print(f"Models (avg) YC inverted: {model_avg_precision_inv:.3f}")
+#print(f"Difference: {model_avg_precision_inv - spf_precision:+.3f}")
 
 ## ================================================== Per Fold Performance ================================================== ##
 
