@@ -11,6 +11,9 @@ import numpy as np
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from scipy.stats import ttest_1samp
 import matplotlib.pyplot as plt
+import warnings
+warnings.filterwarnings("ignore", message="divide by zero encountered")
+warnings.filterwarnings("ignore", message="invalid value encountered")
 
 ## ================================================== Data Handling and Threshold definition ================================================== ##
 
@@ -19,7 +22,7 @@ print(df)
 
 data1 = df[['R_12-18M', 'T10Y2Y', 'T10Y3M', 'BaaSpread', 'PERatioS&P']].dropna()
 y = data1['R_12-18M']
-X = data1[['T10Y3M']].copy()   # main slope spec here
+X = data1[['T10Y2Y']].copy()   # main slope spec here
 
 feature_cols = X.columns.tolist()
 X["Inverted"] = (X.iloc[:, 0] < 0).astype(int)
@@ -181,7 +184,8 @@ for fold_id, (train_idx, test_idx) in enumerate(expanding_splits, start=1):
     preds_aug2 = (proba_aug2 >= threshold).astype(int)
     logit_preds_aug2.extend(preds_aug2)
 
-print("\n======== {}-fold Time Series CV (Logistic Regression) @ threshold = {:.2f} (mean ± std) ========".format(len(expanding_splits), threshold))
+print("=" * 70)
+print("\n {}-fold Time Series CV (Logistic Regression) @ threshold = {:.2f} (mean ± std)".format(len(expanding_splits), threshold))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(precs), np.std(precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(recs),  np.std(recs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(pr_aucs), np.std(pr_aucs)))
@@ -193,6 +197,7 @@ print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(pr_aucs_inv), np.std(pr_aucs_
 
 run_mcnemar("Logit T10Y2Y slope vs augmented", logit_preds_slope2, logit_preds_aug2, logit_y_all)
 run_mcnemar("Logit T10Y3M slope vs augmented", logit_preds_slope3, logit_preds_aug3, logit_y_all)
+print("=" * 70)
 
 ## ================================================== PROBIT ================================================== ##
 
@@ -275,7 +280,7 @@ for train_idx, test_idx in expanding_splits:
     probit_preds_aug2_fold = (probit_proba_aug2 >= threshold).astype(int)
     probit_preds_aug2.extend(probit_preds_aug2_fold)
 
-print("\n======== {}-fold Time Series CV (Probit) @ threshold = {:.2f} (mean ± std) ========".format(len(expanding_splits), threshold))
+print("\n {}-fold Time Series CV (Probit) @ threshold = {:.2f} (mean ± std)".format(len(expanding_splits), threshold))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(probit_precs), np.std(probit_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(probit_recs),  np.std(probit_recs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(probit_pr_aucs), np.std(probit_pr_aucs)))
@@ -287,6 +292,7 @@ print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(probit_pr_aucs_inv), np.std(p
 
 run_mcnemar("Probit T10Y2Y slope vs augmented", probit_preds_slope2, probit_preds_aug2, probit_y_all)
 run_mcnemar("Probit T10Y3M slope vs augmented", probit_preds_slope3, probit_preds_aug3, probit_y_all)
+print("=" * 70)
 
 ## ================================================== GRADIENT BOOSTING ================================================== ##
 
@@ -361,7 +367,7 @@ for train_idx, test_idx in expanding_splits:
     gb_preds_aug2_fold = (gb_proba_aug2 >= threshold).astype(int)
     gb_preds_aug2.extend(gb_preds_aug2_fold)
 
-print("\n======== {}-fold Time Series CV (Gradient Boosting) @ threshold = {:.2f} (mean ± std) ========".format(len(expanding_splits), threshold))
+print("\n {}-fold Time Series CV (Gradient Boosting) @ threshold = {:.2f} (mean ± std)".format(len(expanding_splits), threshold))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(gb_precs), np.std(gb_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(gb_recs),  np.std(gb_recs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(gb_pr_aucs), np.std(gb_pr_aucs)))
@@ -373,6 +379,7 @@ print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(gb_pr_aucs_inv), np.std(gb_pr
 
 run_mcnemar("Gradient Boosting T10Y2Y slope vs augmented", gb_preds_slope2, gb_preds_aug2, gb_y_all)
 run_mcnemar("Gradient Boosting T10Y3M slope vs augmented", gb_preds_slope3, gb_preds_aug3, gb_y_all)
+print("=" * 70)
 
 ## ================================================== RANDOM FOREST ================================================== ##
 
@@ -448,7 +455,7 @@ for train_idx, test_idx in expanding_splits:
     rf_preds_aug2_fold = (rf_proba_aug2 >= threshold).astype(int)
     rf_preds_aug2.extend(rf_preds_aug2_fold)
 
-print("\n======== {}-fold Time Series CV (Random Forest) @ threshold = {:.2f} (mean ± std) ========".format(len(expanding_splits), threshold))
+print("\n {}-fold Time Series CV (Random Forest) @ threshold = {:.2f} (mean ± std)".format(len(expanding_splits), threshold))
 print("Precision: {:.3f} ± {:.3f}".format(np.mean(rf_precs), np.std(rf_precs)))
 print("Recall:    {:.3f} ± {:.3f}".format(np.mean(rf_recs),  np.std(rf_recs)))
 print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(rf_pr_aucs), np.std(rf_pr_aucs)))
@@ -460,6 +467,7 @@ print("PR AUC:    {:.3f} ± {:.3f}".format(np.mean(rf_pr_aucs_inv), np.std(rf_pr
 
 run_mcnemar("Random Forest T10Y2Y slope vs augmented", rf_preds_slope2, rf_preds_aug2, rf_y_all)
 run_mcnemar("Random Forest T10Y3M slope vs augmented", rf_preds_slope3, rf_preds_aug3, rf_y_all)
+print("=" * 70)
 
 ## ============================ PR–AUC Curves: mean over folds ============================ ##
 plt.figure(figsize=(7, 6))
@@ -507,10 +515,10 @@ model_avg_precision_inv = np.mean(all_precisions_inv)
 print("\n======== Averages ========")
 print(f"Models (avg): {model_avg_precision:.3f}")
 print(f"Models (avg) YC inverted: {model_avg_precision_inv:.3f}")
+print("=" * 70)
 
 ## ================================================== Per Fold Performance (Precision & Recall) ================================================== ##
-
-print("\n======== Per-fold Precision & Recall (by model) ========")
+print("\n Per-fold Precision & Recall (by model)")
 
 def _print_per_fold(name, precs_list, recs_list):
     if len(precs_list) == 0 and len(recs_list) == 0:
@@ -530,6 +538,7 @@ _print_per_fold('Logistic Regression', precs, recs)
 _print_per_fold('Probit', probit_precs, probit_recs)
 _print_per_fold('Gradient Boosting', gb_precs, gb_recs)
 _print_per_fold('Random Forest', rf_precs, rf_recs)
+print("=" * 70)
 
 ## ================================================== Build per-observation table for all models ================================================== ##
 
