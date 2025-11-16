@@ -22,7 +22,7 @@ print(df)
 
 data1 = df[['R_12-18M', 'T10Y2Y', 'T10Y3M', 'BaaSpread', 'PERatioS&P']].dropna()
 y = data1['R_12-18M']
-X = data1[['T10Y3M']].copy()   # main slope spec here
+X = data1[['T10Y2Y']].copy()   # main slope spec here
 
 feature_cols = X.columns.tolist()
 X["Inverted"] = (X.iloc[:, 0] < 0).astype(int)
@@ -472,33 +472,27 @@ print("=" * 70)
 ## ============================ PR–AUC Curves: mean over folds ============================ ##
 plt.figure(figsize=(7, 6))
 
-def plot_mean_pr_curve(all_y, all_proba, fold_pr_aucs, label, n_points=200):
+def plot_pr_curve(all_y, all_proba, label):
     if len(all_y) == 0:
         return
-    recall_grid = np.linspace(0.0, 1.0, n_points)
-    precisions_interp = []
-    for y_fold, proba_fold in zip(all_y, all_proba):
-        prec, rec, _ = precision_recall_curve(y_fold, proba_fold)
-        rec_unique, idx = np.unique(rec, return_index=True)
-        prec_unique = prec[idx]
-        prec_on_grid = np.interp(recall_grid, rec_unique, prec_unique)
-        precisions_interp.append(prec_on_grid)
-    mean_precision = np.mean(precisions_interp, axis=0)
-    mean_ap = np.mean(fold_pr_aucs)
-    plt.plot(recall_grid, mean_precision, label=f"{label} (mean PR AUC = {mean_ap:.3f})")
+    y_concat = np.concatenate(all_y)
+    proba_concat = np.concatenate(all_proba)
+    prec_curve, rec_curve, _ = precision_recall_curve(y_concat, proba_concat)
+    pr_auc_val = average_precision_score(y_concat, proba_concat)
+    plt.plot(rec_curve, prec_curve, label=f"{label} (PR AUC = {pr_auc_val:.3f})")
 
-plot_mean_pr_curve(all_y_logit,  all_proba_logit,  pr_aucs,        "Logit")
-plot_mean_pr_curve(all_y_probit, all_proba_probit, probit_pr_aucs, "Probit")
-plot_mean_pr_curve(all_y_gb,     all_proba_gb,     gb_pr_aucs,     "Gradient Boosting")
-plot_mean_pr_curve(all_y_rf,     all_proba_rf,     rf_pr_aucs,     "Random Forest")
+plot_pr_curve(all_y_logit, all_proba_logit, "Logit")
+plot_pr_curve(all_y_probit, all_proba_probit, "Probit")
+plot_pr_curve(all_y_gb, all_proba_gb, "Gradient Boosting")
+plot_pr_curve(all_y_rf, all_proba_rf, "Random Forest")
 
 plt.xlabel("Recall")
 plt.ylabel("Precision")
-plt.title("Precision–Recall Curves (mean over expanding-window folds)")
+plt.title("Precision–Recall Curves (Time-series CV, all folds)")
 plt.legend()
 plt.grid(True)
 plt.tight_layout()
-plt.savefig("pr_curves_mean_over_folds.png", dpi=300, bbox_inches="tight")
+plt.savefig("pr_curves.png", dpi=300, bbox_inches="tight")
 plt.close()
 
 ## ================================================== SPF Comparison ================================================== ##
