@@ -495,6 +495,36 @@ plt.tight_layout()
 plt.savefig("pr_curves.png", dpi=300, bbox_inches="tight")
 plt.close()
 
+## ================================================== Coefficient Analysis ================================================== ##
+
+print("\n=== Statistical Analysis ===")
+X_with_const = sm.add_constant(X[feature_cols], has_constant='add')
+logit_model = sm.Logit(y, X_with_const)
+logit_results = logit_model.fit(disp=0)
+
+print("\nLogistic Regression (Logit) Coefficients:")
+print(logit_results.summary2().tables[1][['Coef.', 'Std.Err.', 'z', 'P>|z|']])
+
+probit_model_full = sm.Probit(y, X_with_const)
+probit_results_full = probit_model_full.fit(disp=0)
+
+print("\nProbit Regression Coefficients:")
+print(probit_results_full.summary2().tables[1][['Coef.', 'Std.Err.', 'z', 'P>|z|']])
+
+probit_margeff = probit_results_full.get_margeff(at='overall')
+print("\nProbit Average Marginal Effects (AME):")
+print(probit_margeff.summary())
+
+vif_data = pd.DataFrame()
+vif_data["feature"] = X_with_const.columns
+vif_data["VIF"] = [
+    variance_inflation_factor(X_with_const.values, i)
+    for i in range(X_with_const.shape[1])
+]
+
+print("\n=== Variance Inflation Factors (VIF) ===")
+print(vif_data[vif_data["feature"] != "const"])
+
 ## ================================================== SPF Comparison ================================================== ##
 
 df_spf = pd.read_excel("Data.xlsx")
